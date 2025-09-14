@@ -1,104 +1,85 @@
-open! Core
+type player_id = int
 
-type player_kind =
-  | X
-  | O
+type role = 
+| President
+| Citizen
+| Scum
 
-type cell_position =
-  { row : int
-  ; column : int
-  }
+type card_rank =
+| Three | Four | Five | Six | Seven | Eight | Nine | Ten
+| Jack | Queen | King | Ace | Two
+
+type card_suit =
+| Heart | Diamond | Club | Spade
+
+type card =
+{
+rank : card_rank
+; suit : card_suit
+}
+
+type player =
+{
+id : player_id
+; name : string option
+; hand : card list
+; role : role
+; prev_position : int option (* What place the user came in last round, used for deck picking *)
+; has_passed : bool (* Needed to know if we have gone a full loop *)
+; total_points : int (* How many points they have in total *)
+}
+
+type group =
+{ rank : card_rank (* rank of the cards played *)
+; count : int (* Number of cards played *)
+; cards : card list (* Which cards were in the move *)
+}
+
+type play =
+| Play of group
+| Pass 
+
+type phase = (* What phase of the game is it*)
+| Dealing 
+| DeckPicking
+| Playing
+| RoundEnd
+
+type turn_state =
+{
+whose_turn: player_id
+; starting_player: player_id option
+}
 
 type decision =
-  | In_progress of { whose_turn : player_kind }
-  | Winner of player_kind
-  | Stalemate
+  | In_progress of turn_state
+  | Round_Over of {finish_order : player_id list}
+  | Game_Over of {final_ranking : (player_id * role) list}
+
+
+type table_state =
+  { current_requirement : group option
+  ; last_advancer : player_id option (* Who was the last one to not pass *)
+  ; passes_in_row : int (* How many times have there been passes in a row *)
+  ; history : (player_id * play) list (* List of previous plays *)
+}
+
+type rules = (* Optional rules that can be added to the game *)
+{
+clear_on_two : bool
+; quad_bomb : bool
+; starting_card : card option
+; max_players : int
+}
 
 type game_state =
-  { board : (cell_position * player_kind) list
-  ; rows : int
-  ; columns : int
-  ; winning_sequence_length : int
-  ; decision : decision
-  }
+{
+players : player list
+; rules : rules
+; deck : card list
+; discard_pile: card list
+; table : table_state
+; phase : phase
+; decision : decision
+}
 
-type move = cell_position
-
-(*=
- | |
------
- | |
------
- | |
-*)
-let initial_state : game_state =
-  { board = []
-  ; rows = 3
-  ; columns = 3
-  ; winning_sequence_length = 3
-  ; decision = In_progress { whose_turn = X }
-  }
-;;
-
-let move_at_0x0 : move = { row = 0; column = 0 }
-
-(*=
-X| |
------
- | |
------
- | |
-*)
-let state_after_move_at_0x0 : game_state =
-  { board = [ move_at_0x0, X ]
-  ; rows = 3
-  ; columns = 3
-  ; winning_sequence_length = 3
-  ; decision = In_progress { whose_turn = O }
-  }
-;;
-
-(*=
- | |X
------
-O|O|X
------
- | |
-*)
-let before_terminal_state : game_state =
-  { board =
-      [ { row = 0; column = 2 }, X
-      ; { row = 1; column = 0 }, O
-      ; { row = 1; column = 2 }, X
-      ; { row = 1; column = 1 }, O
-      ]
-  ; rows = 3
-  ; columns = 3
-  ; winning_sequence_length = 3
-  ; decision = In_progress { whose_turn = X }
-  }
-;;
-
-let move_to_terminal_state : move = { row = 2; column = 2 }
-
-(*=
- | |X
------
-O|O|X
------
- | |X
-*)
-let terminal_state : game_state =
-  { board =
-      [ { row = 0; column = 2 }, X
-      ; { row = 1; column = 0 }, O
-      ; { row = 1; column = 2 }, X
-      ; { row = 1; column = 1 }, O
-      ; { row = 2; column = 2 }, X
-      ]
-  ; rows = 3
-  ; columns = 3
-  ; winning_sequence_length = 3
-  ; decision = Winner X
-  }
-;;
