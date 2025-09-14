@@ -1,3 +1,4 @@
+(* ---------- Types ---------- *)
 type player_id = int
 
 type role =
