@@ -140,7 +140,7 @@ let initial_table_state =
 current_requirement = None
 ; last_advancer = None
 ; passes_in_row = 0 
-; history = []]
+; history = []
 } in
 {
 players = [player1; player2; player3;player4]
