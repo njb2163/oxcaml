@@ -94,6 +94,7 @@ type game_state =
   ; table : table_state
   ; phase : phase
   ; decision : decision
+  ; finished_order : player_id list
   }
 
 (* ---------- Initial Game Setup  ------------ *)
@@ -153,6 +154,7 @@ let initial_state : game_state =
     ; passes_in_row = 0
     ; history = []
     ; current_trick = []
+    ; finished_order = []
     }
   in
   { players = [ player1; player2; player3; player4 ]
@@ -243,6 +245,7 @@ let terminal_state : game_state =
           ; 3, Play example_group_3s
           ; 0, Play example_group_4d
           ]
+      ; finish_order = [ 0; 3; 1; 2 ]
       }
   ; decision = Round_Over { finish_order = [ 0; 3; 1; 2 ] }
   }
@@ -308,12 +311,6 @@ let remove_cards_exact (to_remove : card list) (hand : card list) : card list op
     | None -> None
     | Some h -> remove_card_once c h
     (* If at any point a card is not found, return None. Otherwise, keep removing cards from the updated hand. *))
-;;
-
-let next_player_id (players : player list) (id : player_id) =
-  (* Get the next player id based on the current player *)
-  let n = List.length players in
-  (id + 1) mod n
 ;;
 
 let lookup_player_exn (players : player list) (id : player_id) =
@@ -412,6 +409,36 @@ let is_completion (t : game_state) (g : group) : bool =
       Int.equal (run + g.count) 4)
 ;;
 
+(* ---------- Player status checks ---------- *)
+
+let player_has_cards (p : player) = not (List.is_empty p.hand)
+
+let player_id_is_finished (t : game_state) (id : player_id) =
+  (* Check if a player is finished either by being in the finished order or having no cards left *)
+  List.mem t.finished_order id ~equal:Int.equal
+  || not (player_has_cards (lookup_player_exn t.players id))
+;;
+
+let active_player_ids (t : game_state) : player_id list =
+  (* Get a list of player ids who are still active (not finished) *)
+  t.players
+  |> List.filter ~f:(fun p -> not (player_id_is_finished t p.id))
+  |> List.map ~f:(fun p -> p.id)
+;;
+
+let rec next_active_after (t : game_state) (from_id : player_id) : player_id option =
+  (* Get the next active player id after the given id, skipping finished players *)
+  let n = List.length t.players in
+  let rec step k =
+    if k > n
+    then None
+    else (
+      let nid = (from_id + k) mod n in
+      if player_id_is_finished t nid then step (k + 1) else Some nid)
+  in
+  step 1
+;;
+
 (* ---------- Main move function ---------- *)
 
 let make_move (t : game_state) (move : play) : (game_state, Move_error.t) Result.t =
@@ -435,19 +462,32 @@ let make_move (t : game_state) (move : play) : (game_state, Move_error.t) Result
         else (
           let passes_in_row = t.table.passes_in_row + 1 in
           let history = (player_id, Pass) :: t.table.history in
+          let active_count = List.length (active_player_ids t) in
           let everyone_else_passed =
             (* True if we are passing to the player who last played a card to the trick *)
+            active_count > 1
+            (* Guard check so that the trick doesn't end when only one player is active *)
+            &&
             match t.table.last_advancer with
             | None -> false
-            | Some _ -> passes_in_row >= n_players - 1
+            | Some _ -> passes_in_row >= active_count - 1
           in
           if everyone_else_passed
           then (
             (* End trick; starter is the last_advancer if present, otherwise fall back to current. *)
-            let starter =
+            let raw_starter =
               match t.table.last_advancer with
               | Some id -> id
               | None -> player_id
+            in
+            (* If last_advancer went out, hand the lead to the next active after them *)
+            let starter =
+              match
+                player_id_is_finished t raw_starter, next_active_after t raw_starter
+              with
+              | true, Some nxt -> nxt
+              | true, None -> raw_starter (* edge: round will end elsewhere *)
+              | false, _ -> raw_starter
             in
             let t' =
               { t with table = { t.table with history } } |> start_new_trick_from ~starter
@@ -455,7 +495,11 @@ let make_move (t : game_state) (move : play) : (game_state, Move_error.t) Result
             Ok t')
           else (
             (* Otherwise, normal Pass to the next player *)
-            let next_id = next_player_id t.players player_id in
+            let next_id =
+              match next_active_after t player_id with
+              | Some nxt -> nxt
+              | None -> player_id
+            in
             Ok
               { t with
                 table = { t.table with passes_in_row; history }
@@ -475,7 +519,7 @@ let make_move (t : game_state) (move : play) : (game_state, Move_error.t) Result
           let completes_set = is_completion t g in
           (* Alternatively, is the play completing a set *)
           (* A Play is allowed if it's your turn OR if you complete the set out-of-turn. *)
-          if (not is_players_turn) && (not completes_set)
+          if (not is_players_turn) && not completes_set
           then Error Move_error.Not_players_turn
           else (
             (* Remove cards from player's hand *)
@@ -495,37 +539,100 @@ let make_move (t : game_state) (move : play) : (game_state, Move_error.t) Result
               (match requirement_ok with
                | Error e -> Error e
                | Ok () ->
-                (* Play is valid, proceed with updating the board *)
-                 let players' = update_player_hand t.players ~id:player_id ~new_hand in (* Remove played cards from the player's hand *)
-                 let history = (player_id, Play g) :: t.table.history in (* Update the history *)
-                 let current_trick' = (player_id, g) :: t.table.current_trick in (* Update the current trick *)
-                 (* Update the table state *)
-                 let table' =
-                   { t.table with
-                     current_requirement = Some g
-                   ; last_advancer = Some player_id
-                   ; passes_in_row = 0
-                   ; history
-                   ; current_trick = current_trick'
-                   }
+                 (* Play is valid, proceed with updating the board *)
+                 let players' = update_player_hand t.players ~id:player_id ~new_hand in
+                 (* Remove played cards from the player's hand *)
+                 let history = (player_id, Play g) :: t.table.history in
+                 (* Update the history *)
+                 let current_trick' = (player_id, g) :: t.table.current_trick in
+                 (* Update the current trick *)
+
+                 (* Was this player’s hand emptied by this play? If so, append to finished_order. *)
+                 let finished_order' =
+                   let just_finished =
+                     (not (List.mem t.finished_order player_id ~equal:Int.equal))
+                     && List.is_empty new_hand
+                   in
+                   if just_finished
+                   then t.finished_order @ [ player_id ]
+                   else t.finished_order
                  in
-                 (* Clear conditions:
+                 (* Compute how many active remain after this play *)
+                 let t_tmp =
+                   { t with players = players'; finished_order = finished_order' }
+                 in
+                 let active_ids = active_player_ids t_tmp in
+                 (match active_ids with
+                  | [ last_id ] ->
+                    (* Round over: the final remaining player is last *)
+                    let final_ranking = finished_order' @ [ last_id ] in
+                    let table' =
+                      { t.table with
+                        history
+                      ; current_trick = current_trick'
+                      ; current_requirement = None
+                      ; last_advancer = None
+                      ; passes_in_row = 0
+                      }
+                    in
+                    Ok
+                      { t with
+                        players = players'
+                      ; table = table'
+                      ; finished_order = finished_order'
+                      ; decision = Round_Over { finish_order = final_ranking }
+                      }
+                  | _ ->
+                    (* Round continues otherwise *)
+
+                    (* Update the table state *)
+                    let table' =
+                      { t.table with
+                        current_requirement = Some g
+                      ; last_advancer = Some player_id
+                      ; passes_in_row = 0
+                      ; history
+                      ; current_trick = current_trick'
+                      }
+                    in
+                    (* Clear conditions:
                     - Completing the 4-of-a-kind set, or
                     - Optional house rule: clear on Two. *)
-                 let cleared_on_two = t.rules.clear_on_two && Poly.equal g.rank Two in
-                 if completes_set || cleared_on_two
-                  (* Start the new trick from the current player since they cleared the trick *)
-                 then (
-                   let t' = { t with players = players'; table = table' } in
-                   let t'' = start_new_trick_from t' ~starter:player_id in
-                   Ok t'')
-                 else (
-                   (* Regular advance in turn order *)
-                   let next_id = next_player_id t.players player_id in
-                   Ok
-                     { t with
-                       players = players'
-                     ; table = table'
-                     ; decision = In_progress { turn_state with whose_turn = next_id }
-                     })))))
+                    let cleared_on_two = t.rules.clear_on_two && Poly.equal g.rank Two in
+                    if completes_set || cleared_on_two
+                    then (
+                      let starter =
+                        if List.is_empty new_hand
+                        then (
+                          (* player went out on the clear; they cannot lead *)
+                          match next_active_after t_tmp player_id with
+                          | Some nxt -> nxt
+                          | None ->
+                            player_id (* won’t be used; round likely ended above *))
+                        else player_id
+                      in
+                      let t1 =
+                        { t with
+                          players = players'
+                        ; table = table'
+                        ; finished_order = finished_order'
+                        }
+                      in
+                      let t2 = start_new_trick_from t1 ~starter in
+                      Ok t2)
+                    else (
+                      (* Regular advance in turn order *)
+                      let next_id =
+                        match next_active_after t_tmp player_id with
+                        | Some nxt -> nxt
+                        | None ->
+                          player_id (* defensive; round end would have triggered above *)
+                      in
+                      Ok
+                        { t with
+                          players = players'
+                        ; table = table'
+                        ; finished_order = finished_order'
+                        ; decision = In_progress { turn_state with whose_turn = next_id }
+                        }))))))
 ;;
