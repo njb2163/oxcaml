@@ -265,6 +265,8 @@ module Move_error = struct
     | Does_not_meet_requirement (* wrong size or not >= required rank *)
     | Illegal_start_on_two (* can't start a trick with a 2 if clear-on-two is enabled *)
     | Illegal_two_group (* can't play a group of 2s if clear-on-two is enabled *)
+    | Pass_with_no_advancer
+      (* Pass is validated but no advancer is set; shouldn't happen; defensive *)
   [@@deriving sexp, compare, equal]
 end
 
@@ -460,34 +462,40 @@ let make_move (t : game_state) (move : play) : (game_state, Move_error.t) Result
            (* Players cannot Pass when there are no cards on the table *)
         then Error Move_error.Illegal_pass_when_no_requirement
         else (
+          (* Increment passes in a row *)
           let passes_in_row = t.table.passes_in_row + 1 in
+          (* Update history with the current move*)
           let history = (player_id, Pass) :: t.table.history in
+          (* Count how many active players remain *)
           let active_count = List.length (active_player_ids t) in
+          (* Check if everyone else has passed, which ends the trick *)
           let everyone_else_passed =
-            (* True if we are passing to the player who last played a card to the trick *)
-            active_count > 1
             (* Guard check so that the trick doesn't end when only one player is active *)
+            active_count > 1
             &&
             match t.table.last_advancer with
-            | None -> false
-            | Some _ -> passes_in_row >= active_count - 1
+            | None ->
+              Error Move_error.Pass_with_no_advancer
+              (* Shouldn't happen; last_advancer should be Some if there's a requirement *)
+            | Some _ -> passes_in_row >= active_count - 1 (* Everyone else has passed *)
           in
           if everyone_else_passed
           then (
-            (* End trick; starter is the last_advancer if present, otherwise fall back to current. *)
+            (* End trick; starter is the last_advancer if present, otherwise go to next active. *)
             let raw_starter =
               match t.table.last_advancer with
               | Some id -> id
-              | None -> player_id
+              | None -> Error Move_error.Pass_with_no_advancer
+              (* Should be caught above *)
             in
             (* If last_advancer went out, hand the lead to the next active after them *)
             let starter =
               match
                 player_id_is_finished t raw_starter, next_active_after t raw_starter
               with
-              | true, Some nxt -> nxt
+              | true, Some nxt -> nxt (* last_advancer went out; next active takes lead *)
               | true, None -> raw_starter (* edge: round will end elsewhere *)
-              | false, _ -> raw_starter
+              | false, _ -> raw_starter (* last_advancer still active; they lead *)
             in
             let t' =
               { t with table = { t.table with history } } |> start_new_trick_from ~starter
@@ -506,8 +514,8 @@ let make_move (t : game_state) (move : play) : (game_state, Move_error.t) Result
               ; decision = In_progress { turn_state with whose_turn = next_id }
               }))
       | Play g ->
+        (* Check that the cards being played are permitted based on the game rules *)
         if not (valid_group_shape g)
-           (* Check that the cards being played are permitted based on the game rules *)
         then Error Move_error.Illegal_group_shape
         else (
           let is_players_turn =
@@ -516,17 +524,17 @@ let make_move (t : game_state) (move : play) : (game_state, Move_error.t) Result
             | In_progress s -> Poly.equal player_id s.whose_turn
             | _ -> false
           in
+          (* Additionally, is the play completing a set *)
           let completes_set = is_completion t g in
-          (* Alternatively, is the play completing a set *)
-          (* A Play is allowed if it's your turn OR if you complete the set out-of-turn. *)
+          (* A Play is allowed if it's your turn OR if you complete the set out-of-turn *)
           if (not is_players_turn) && not completes_set
           then Error Move_error.Not_players_turn
           else (
-            (* Remove cards from player's hand *)
+            (* Else, play is valid, so remove cards from player's hand *)
             match remove_cards_exact g.cards player.hand with
             | None -> Error Move_error.Cards_not_in_hand
             | Some new_hand ->
-              (* Normal plays must meet requirement; set completions override the usual requirement test. *)
+              (* Normal plays must meet rules requirement; set completions override the usual requirement test. *)
               let requirement_ok =
                 if completes_set
                 then Ok ()
@@ -538,21 +546,21 @@ let make_move (t : game_state) (move : play) : (game_state, Move_error.t) Result
               in
               (match requirement_ok with
                | Error e -> Error e
+               (* Play is valid, proceed with updating the board *)
                | Ok () ->
-                 (* Play is valid, proceed with updating the board *)
-                 let players' = update_player_hand t.players ~id:player_id ~new_hand in
                  (* Remove played cards from the player's hand *)
-                 let history = (player_id, Play g) :: t.table.history in
+                 let players' = update_player_hand t.players ~id:player_id ~new_hand in
                  (* Update the history *)
-                 let current_trick' = (player_id, g) :: t.table.current_trick in
+                 let history = (player_id, Play g) :: t.table.history in
                  (* Update the current trick *)
-
-                 (* Was this player’s hand emptied by this play? If so, append to finished_order. *)
+                 let current_trick' = (player_id, g) :: t.table.current_trick in
+                 (* If player’s hand emptied by the play, append them to finished_order. *)
                  let finished_order' =
                    let just_finished =
                      (not (List.mem t.finished_order player_id ~equal:Int.equal))
                      && List.is_empty new_hand
                    in
+                   (* TODO: add case where last card as two results in loss *)
                    if just_finished
                    then t.finished_order @ [ player_id ]
                    else t.finished_order
@@ -562,9 +570,10 @@ let make_move (t : game_state) (move : play) : (game_state, Move_error.t) Result
                    { t with players = players'; finished_order = finished_order' }
                  in
                  let active_ids = active_player_ids t_tmp in
+                 (* Check if there is only one active player left *)
                  (match active_ids with
+                  (* Only one player remaining, they are the loser of the round *)
                   | [ last_id ] ->
-                    (* Round over: the final remaining player is last *)
                     let final_ranking = finished_order' @ [ last_id ] in
                     let table' =
                       { t.table with
@@ -575,6 +584,7 @@ let make_move (t : game_state) (move : play) : (game_state, Move_error.t) Result
                       ; passes_in_row = 0
                       }
                     in
+                    (* End the round, change the decision state *)
                     Ok
                       { t with
                         players = players'
@@ -602,13 +612,16 @@ let make_move (t : game_state) (move : play) : (game_state, Move_error.t) Result
                     if completes_set || cleared_on_two
                     then (
                       let starter =
+                        (* If the player has no cards after clearing, find the next active player *)
                         if List.is_empty new_hand
                         then (
-                          (* player went out on the clear; they cannot lead *)
+                          (* player went out on the clear; go to the next active player *)
                           match next_active_after t_tmp player_id with
                           | Some nxt -> nxt
                           | None ->
-                            player_id (* won’t be used; round likely ended above *))
+                            player_id
+                            (* won’t be used; round would have ended above *)
+                            (* Otherwise, player who cleared starts *))
                         else player_id
                       in
                       let t1 =
