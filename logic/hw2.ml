@@ -75,12 +75,13 @@ type table_state =
   ; last_advancer : player_id option (* Who was the last one to not pass *)
   ; passes_in_row : int (* How many times have there been passes in a row *)
   ; history : (player_id * play) list (* List of previous plays *)
+  ; current_trick : (player_id * group) list
+  (* plays in the current trick, different from history since it clears with the trick *)
   }
 
 type rules =
   { (* Optional rules that can be added to the game *)
     clear_on_two : bool
-  ; quad_bomb : bool
   ; starting_card : card option
   ; max_players : int
   }
@@ -142,12 +143,17 @@ let player4 : player =
 ;;
 
 let initial_rules : rules =
-  { clear_on_two = false; quad_bomb = false; starting_card = None; max_players = 4 }
+  { clear_on_two = false; starting_card = None; max_players = 4 }
 ;;
 
 let initial_state : game_state =
   let initial_table_state =
-    { current_requirement = None; last_advancer = None; passes_in_row = 0; history = [] }
+    { current_requirement = None
+    ; last_advancer = None
+    ; passes_in_row = 0
+    ; history = []
+    ; current_trick = []
+    }
   in
   { players = [ player1; player2; player3; player4 ]
   ; rules = initial_rules
@@ -370,104 +376,156 @@ let start_new_trick_from (gs : game_state) ~(starter : player_id) : game_state =
       ; last_advancer = Some starter
       ; passes_in_row = 0
       ; history = gs.table.history
+      ; current_trick = []
       }
   ; decision = In_progress { whose_turn = starter; starting_player = Some starter }
   }
 ;;
 
+let current_run_count (t : game_state) ~(rank : card_rank) : int =
+  (* Count how many cards of a given rank are in the current trick *)
+  let rec loop acc = function
+    | [] -> acc (* End of list, return accumulated count *)
+    | (_pid, g) :: rest ->
+      if Poly.equal g.rank rank then loop (acc + g.count) rest else acc
+    (* Increment accumulator by 1 for each card in the trick that matches the rank being searched for.
+      Otherwise, break and return the accumulator *)
+  in
+  loop 0 t.table.current_trick
+;;
+
+let is_completion (t : game_state) (g : group) : bool =
+  match t.table.current_requirement with
+  | None ->
+    if g.count = 4
+    then true
+    else
+      false
+      (* If there is no current requirement, we can only be completing if we play 4 of a kind *)
+  | Some req ->
+    (* Must be completing the current run's rank *)
+    if not (Poly.equal g.rank req.rank)
+    then false
+    else (
+      (* Check that the number of cards in the group actually completes the set of 4 *)
+      let run = current_run_count t ~rank:req.rank in
+      Int.equal (run + g.count) 4)
+;;
+
+(* ---------- Main move function ---------- *)
+
 let make_move (t : game_state) (move : play) : (game_state, Move_error.t) Result.t =
-  (* (1) Check error states *)
   match t.decision with
   | Round_Over _ | Game_Over _ ->
-    (* Game/Round is over, no move can be made *)
-    Error Move_error.Game_is_over
+    Error Move_error.Game_is_over (* Game is over, no moves can be made *)
   | In_progress turn_state ->
-    (* Moves can only be made when we are in the Playing phase *)
     if not (Poly.equal t.phase Playing)
+       (* Need to be in the Playing phase to play cards *)
     then Error Move_error.Illegal_phase
     else (
-      (* Handle the move *)
+      (* Otherwise, process the move which is either a Play or Pass *)
       let player_id = turn_state.whose_turn in
       let n_players = List.length t.players in
       let player = lookup_player_exn t.players player_id in
       match move with
       | Pass ->
-        (* (2) Handle cases where the current player Passes *)
-        let passes_in_row = t.table.passes_in_row + 1 in
-        let history = (player_id, Pass) :: t.table.history in
-        let everyone_else_passed =
-          (* “everyone else” means n_players - 1 passes since last advancer. 
-          Essentially, no one else could play so trick goes back to the player who started the trick *)
-          match t.table.last_advancer with
-          | None -> false
-          | Some _ -> passes_in_row >= n_players - 1
-        in
         if Option.is_none t.table.current_requirement
-        then
-          (* Can't pass when there are no cards in the middle *)
-          Error Move_error.Illegal_pass_when_no_requirement
-        else if everyone_else_passed
-        then (
-          (* Trick ends; next trick starts with last_advancer *)
-          let starter =
+           (* Players cannot Pass when there are no cards on the table *)
+        then Error Move_error.Illegal_pass_when_no_requirement
+        else (
+          let passes_in_row = t.table.passes_in_row + 1 in
+          let history = (player_id, Pass) :: t.table.history in
+          let everyone_else_passed =
+            (* True if we are passing to the player who last played a card to the trick *)
             match t.table.last_advancer with
-            | Some id -> id
-            | None -> player_id
+            | None -> false
+            | Some _ -> passes_in_row >= n_players - 1
           in
-          let t' =
-            { t with table = { t.table with history } } |> start_new_trick_from ~starter
-          in
-          Ok t')
-        else (
-          let next_id = next_player_id t.players player_id in
-          Ok
-            { t with
-              table = { t.table with passes_in_row; history }
-            ; decision = In_progress { turn_state with whose_turn = next_id }
-            })
+          if everyone_else_passed
+          then (
+            (* End trick; starter is the last_advancer if present, otherwise fall back to current. *)
+            let starter =
+              match t.table.last_advancer with
+              | Some id -> id
+              | None -> player_id
+            in
+            let t' =
+              { t with table = { t.table with history } } |> start_new_trick_from ~starter
+            in
+            Ok t')
+          else (
+            (* Otherwise, normal Pass to the next player *)
+            let next_id = next_player_id t.players player_id in
+            Ok
+              { t with
+                table = { t.table with passes_in_row; history }
+              ; decision = In_progress { turn_state with whose_turn = next_id }
+              }))
       | Play g ->
-        (* (3) Handle a player Playing *)
-        if not (valid_group_shape g) (* Must pass a valid group to play*)
+        if not (valid_group_shape g)
+           (* Check that the cards being played are permitted based on the game rules *)
         then Error Move_error.Illegal_group_shape
-        else if not (Poly.equal player_id turn_state.whose_turn)
-                (* Must be their turn *)
-                (* TODO: Add the ability to play out of turn if you can complete a set *)
-        then Error Move_error.Not_players_turn
         else (
-          (* 3b) Validate cards are in hand *)
-          match remove_cards_exact g.cards player.hand with
-          | None -> Error Move_error.Cards_not_in_hand
-          | Some new_hand ->
-            (* 3c) Validate against current requirement *)
-            (match
-               meets_requirement ~rules:t.rules ~current_req:t.table.current_requirement g
-             with
-             | Error e -> Error e
-             | Ok () ->
-               let players' = update_player_hand t.players ~id:player_id ~new_hand in
-               let history = (player_id, Play g) :: t.table.history in
-               let table' =
-                 { t.table with
-                   current_requirement = Some g
-                 ; last_advancer = Some player_id
-                 ; passes_in_row = 0
-                 ; history
-                 }
-               in
-               (* 3d) Optional rule: clear-on-two ends trick immediately *)
-               let cleared_on_two = t.rules.clear_on_two && Poly.equal g.rank Two in
-               if cleared_on_two
-               then (
-                 let t' = { t with players = players'; table = table' } in
-                 let t'' = start_new_trick_from t' ~starter:player_id in
-                 Ok t'')
-               else (
-                 (* 3e) Advance turn *)
-                 let next_id = next_player_id t.players player_id in
-                 Ok
-                   { t with
-                     players = players'
-                   ; table = table'
-                   ; decision = In_progress { turn_state with whose_turn = next_id }
-                   }))))
+          let is_players_turn =
+            (* Check that the Play is being made by the Player whose turn it is *)
+            match t.decision with
+            | In_progress s -> Poly.equal player_id s.whose_turn
+            | _ -> false
+          in
+          let completes_set = is_completion t g in
+          (* Alternatively, is the play completing a set *)
+          (* A Play is allowed if it's your turn OR if you complete the set out-of-turn. *)
+          if (not is_players_turn) && (not completes_set)
+          then Error Move_error.Not_players_turn
+          else (
+            (* Remove cards from player's hand *)
+            match remove_cards_exact g.cards player.hand with
+            | None -> Error Move_error.Cards_not_in_hand
+            | Some new_hand ->
+              (* Normal plays must meet requirement; set completions override the usual requirement test. *)
+              let requirement_ok =
+                if completes_set
+                then Ok ()
+                else
+                  meets_requirement
+                    ~rules:t.rules
+                    ~current_req:t.table.current_requirement
+                    g
+              in
+              (match requirement_ok with
+               | Error e -> Error e
+               | Ok () ->
+                (* Play is valid, proceed with updating the board *)
+                 let players' = update_player_hand t.players ~id:player_id ~new_hand in (* Remove played cards from the player's hand *)
+                 let history = (player_id, Play g) :: t.table.history in (* Update the history *)
+                 let current_trick' = (player_id, g) :: t.table.current_trick in (* Update the current trick *)
+                 (* Update the table state *)
+                 let table' =
+                   { t.table with
+                     current_requirement = Some g
+                   ; last_advancer = Some player_id
+                   ; passes_in_row = 0
+                   ; history
+                   ; current_trick = current_trick'
+                   }
+                 in
+                 (* Clear conditions:
+                    - Completing the 4-of-a-kind set, or
+                    - Optional house rule: clear on Two. *)
+                 let cleared_on_two = t.rules.clear_on_two && Poly.equal g.rank Two in
+                 if completes_set || cleared_on_two
+                  (* Start the new trick from the current player since they cleared the trick *)
+                 then (
+                   let t' = { t with players = players'; table = table' } in
+                   let t'' = start_new_trick_from t' ~starter:player_id in
+                   Ok t'')
+                 else (
+                   (* Regular advance in turn order *)
+                   let next_id = next_player_id t.players player_id in
+                   Ok
+                     { t with
+                       players = players'
+                     ; table = table'
+                     ; decision = In_progress { turn_state with whose_turn = next_id }
+                     })))))
 ;;
