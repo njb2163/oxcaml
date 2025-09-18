@@ -67,7 +67,7 @@ type turn_state =
 
 type decision =
   | In_progress of turn_state
-  | Round_Over of { finish_order : player_id list }
+  | Round_Over of { round_ranking : player_id list }
   | Game_Over of { final_ranking : (player_id * role) list }
 
 type table_state =
@@ -154,7 +154,6 @@ let initial_state : game_state =
     ; passes_in_row = 0
     ; history = []
     ; current_trick = []
-    ; finished_order = []
     }
   in
   { players = [ player1; player2; player3; player4 ]
@@ -164,6 +163,7 @@ let initial_state : game_state =
   ; table = initial_table_state
   ; phase = Dealing
   ; decision = In_progress { whose_turn = 0; starting_player = None }
+  ; finished_order = []
   }
 ;;
 
@@ -181,6 +181,7 @@ let state_after_first_move : game_state =
       ; last_advancer = Some 0
       ; passes_in_row = 0
       ; history = [ 0, Play example_group_3h ]
+      ; current_trick = [ 0, example_group_3h ]
       }
   ; decision = In_progress { whose_turn = 1; starting_player = Some 0 }
   }
@@ -194,6 +195,7 @@ let state_after_second_move : game_state =
       ; last_advancer = Some 0
       ; passes_in_row = 1
       ; history = [ 0, Play example_group_3h; 1, Pass ]
+      ; current_trick = [ 0, example_group_3h ]
       }
   ; decision = In_progress { whose_turn = 2; starting_player = Some 0 }
   }
@@ -207,6 +209,7 @@ let state_after_third_move : game_state =
       ; last_advancer = Some 0
       ; passes_in_row = 2
       ; history = [ 0, Play example_group_3h; 1, Pass; 2, Pass ]
+      ; current_trick = [ 0, example_group_3h ]
       }
   ; decision = In_progress { whose_turn = 3; starting_player = Some 0 }
   }
@@ -223,6 +226,7 @@ let state_after_fourth_move : game_state =
       ; last_advancer = Some 3
       ; passes_in_row = 0
       ; history = [ 0, Play example_group_3h; 1, Pass; 2, Pass; 3, Play example_group_3s ]
+      ; current_trick = [ 3, example_group_3s; 0, example_group_3h ]
       }
   ; decision = In_progress { whose_turn = 0; starting_player = Some 0 }
   }
@@ -245,9 +249,10 @@ let terminal_state : game_state =
           ; 3, Play example_group_3s
           ; 0, Play example_group_4d
           ]
-      ; finish_order = [ 0; 3; 1; 2 ]
+      ; current_trick = [ 0, example_group_4d; 3, example_group_3s; 0, example_group_3h ]
       }
-  ; decision = Round_Over { finish_order = [ 0; 3; 1; 2 ] }
+  ; decision = Round_Over { round_ranking = [ 0; 3; 1; 2 ] }
+  ; finished_order = [ 0; 3; 1; 2 ]
   }
 ;;
 
@@ -353,6 +358,7 @@ let meets_requirement ~(rules : rules) ~(current_req : group option) (g : group)
     then
       Error Move_error.Illegal_start_on_two
       (* Can't start a trick with a 2 if clear-on-two is enabled *)
+    else Ok ()
   | Some req ->
     if not (Int.equal g.count req.count)
     then Error Move_error.Does_not_meet_requirement (* Must match count exactly *)
@@ -454,7 +460,6 @@ let make_move (t : game_state) (move : play) : (game_state, Move_error.t) Result
     else (
       (* Otherwise, process the move which is either a Play or Pass *)
       let player_id = turn_state.whose_turn in
-      let n_players = List.length t.players in
       let player = lookup_player_exn t.players player_id in
       match move with
       | Pass ->
@@ -475,7 +480,7 @@ let make_move (t : game_state) (move : play) : (game_state, Move_error.t) Result
             &&
             match t.table.last_advancer with
             | None ->
-              Error Move_error.Pass_with_no_advancer
+              false
               (* Shouldn't happen; last_advancer should be Some if there's a requirement *)
             | Some _ -> passes_in_row >= active_count - 1 (* Everyone else has passed *)
           in
@@ -485,8 +490,8 @@ let make_move (t : game_state) (move : play) : (game_state, Move_error.t) Result
             let raw_starter =
               match t.table.last_advancer with
               | Some id -> id
-              | None -> Error Move_error.Pass_with_no_advancer
-              (* Should be caught above *)
+              | None -> player_id
+              (* Should be caught above, default to player_id *)
             in
             (* If last_advancer went out, hand the lead to the next active after them *)
             let starter =
@@ -590,7 +595,7 @@ let make_move (t : game_state) (move : play) : (game_state, Move_error.t) Result
                         players = players'
                       ; table = table'
                       ; finished_order = finished_order'
-                      ; decision = Round_Over { finish_order = final_ranking }
+                      ; decision = Round_Over { round_ranking = final_ranking }
                       }
                   | _ ->
                     (* Round continues otherwise *)
