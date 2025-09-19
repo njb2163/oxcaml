@@ -1,5 +1,6 @@
-(library
- (name tictactoe_logic_library)
+(executable
+ (name hw2)
+ (modules hw2)
  (libraries core)
- (preprocess
-  (pps ppx_jane)))
+ (preprocess (pps ppx_jane))
+ (flags (:standard -warn-error -A)))

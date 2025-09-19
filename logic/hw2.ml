@@ -1,3 +1,5 @@
+open! Core
+
 (* ---------- Types ---------- *)
 type player_id = int
 
@@ -376,8 +378,7 @@ let meets_requirement ~(rules : rules) ~(current_req : group option) (g : group)
 let start_new_trick_from (gs : game_state) ~(starter : player_id) : game_state =
   { gs with
     table =
-      { gs.table with
-        current_requirement = None
+      { current_requirement = None
       ; last_advancer = Some starter
       ; passes_in_row = 0
       ; history = gs.table.history
@@ -434,7 +435,7 @@ let active_player_ids (t : game_state) : player_id list =
   |> List.map ~f:(fun p -> p.id)
 ;;
 
-let rec next_active_after (t : game_state) (from_id : player_id) : player_id option =
+let next_active_after (t : game_state) (from_id : player_id) : player_id option =
   (* Get the next active player id after the given id, skipping finished players *)
   let n = List.length t.players in
   let rec step k =
@@ -581,8 +582,7 @@ let make_move (t : game_state) (move : play) : (game_state, Move_error.t) Result
                   | [ last_id ] ->
                     let final_ranking = finished_order' @ [ last_id ] in
                     let table' =
-                      { t.table with
-                        history
+                      { history
                       ; current_trick = current_trick'
                       ; current_requirement = None
                       ; last_advancer = None
@@ -602,8 +602,7 @@ let make_move (t : game_state) (move : play) : (game_state, Move_error.t) Result
 
                     (* Update the table state *)
                     let table' =
-                      { t.table with
-                        current_requirement = Some g
+                      { current_requirement = Some g
                       ; last_advancer = Some player_id
                       ; passes_in_row = 0
                       ; history
