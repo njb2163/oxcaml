@@ -4,7 +4,7 @@ module Player_kind : sig
   type t =
     | X
     | O
-  [@@deriving sexp, to_string, compare, equal]
+  [@@deriving sexp, compare, equal]
 
   val opposite : t -> t
 end

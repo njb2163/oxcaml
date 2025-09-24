@@ -4,7 +4,7 @@ module Player_kind = struct
   type t =
     | X
     | O
-  [@@deriving sexp, to_string, compare, equal]
+  [@@deriving sexp, compare, equal]
 
   (* It's clearer to use type inference and just write:
      [let opposite t =]
@@ -17,14 +17,18 @@ module Player_kind = struct
 end
 
 module Cell_position = struct
-  type t =
-    { row : int
-    ; column : int
-    }
-  [@@deriving sexp, compare]
+  module T = struct
+    type t =
+      { row : int
+      ; column : int
+      }
+    [@@deriving sexp, compare]
+  end
+
+  include T
 
   (* Creates a [Cell_position.Map.t]. *)
-  include functor Comparable.Make
+  include Comparable.Make (T)
 end
 
 module Move = Cell_position
@@ -91,10 +95,10 @@ module Game_state = struct
   ;;
 
   let check_direction_starting_from
-      ~vertical_delta
-      ~horizontal_delta
-      { board; winning_sequence_length; _ }
-      ({ row; column } : Cell_position.t)
+        ~vertical_delta
+        ~horizontal_delta
+        { board; winning_sequence_length; _ }
+        ({ row; column } : Cell_position.t)
     =
     let cells =
       List.range 0 winning_sequence_length

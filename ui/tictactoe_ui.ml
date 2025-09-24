@@ -1,7 +1,7 @@
 open! Core
 open Tictactoe_logic_library
 open Hw2_tictactoe_logic
-open! Bonsai_web
+open Virtual_dom
 open! Bonsai.Let_syntax
 
 let lookup_cell (game_state : Game_state.t) ~row ~column =
@@ -55,11 +55,11 @@ let tic_tac_toe_board ~(game_state : Game_state.t) ~set_game_state =
           Css_gen.(
             left
               (`Percent
-                (Percent.of_percentage
-                   (Int.to_float column *. 100.0 /. Int.to_float game_state.columns)))
+                  (Percent.of_percentage
+                     (Int.to_float column *. 100.0 /. Int.to_float game_state.columns)))
             @> width
                  (`Percent
-                   (Percent.of_percentage (100.0 /. Int.to_float game_state.columns))))
+                     (Percent.of_percentage (100.0 /. Int.to_float game_state.columns))))
       ; maybe_clickable_attr
       ]
     in
@@ -97,23 +97,26 @@ let tic_tac_toe_board ~(game_state : Game_state.t) ~set_game_state =
                Css_gen.(
                  top
                    (`Percent
-                     (Percent.of_percentage
-                        (Int.to_float row *. 100.0 /. Int.to_float game_state.rows)))
+                       (Percent.of_percentage
+                          (Int.to_float row *. 100.0 /. Int.to_float game_state.rows)))
                  @> height
                       (`Percent
-                        (Percent.of_percentage (100.0 /. Int.to_float game_state.rows))))
+                          (Percent.of_percentage (100.0 /. Int.to_float game_state.rows))))
            ]
          (List.init game_state.columns ~f:(fun column -> render_cell ~row ~column))))
 ;;
 
-let app (local_ graph) =
+let app =
   let initial_state =
     Game_state.create ~winning_sequence_length:3 ~rows:3 ~columns:3
     |> Result.ok
     |> Option.value_exn
   in
-  let game_state, set_game_state = Bonsai.state initial_state graph in
-  let%arr game_state and set_game_state in
+  let%sub game_state, set_game_state =
+    Bonsai.state ~default_model:initial_state (module Game_state)
+  in
+  let%arr game_state = game_state
+  and set_game_state = set_game_state in
   tic_tac_toe_board ~game_state ~set_game_state
 ;;
 

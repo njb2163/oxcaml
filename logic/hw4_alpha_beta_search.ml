@@ -60,21 +60,21 @@ let rec alpha_beta (node : Game_state.t) depth alpha beta =
      | X ->
        List.fold_until
          (children node ~sort_by_whose_turn:whose_turn)
-         ~init:(~value:Int.min_value, ~alpha)
-         ~finish:(fun (~value, ~alpha:_) -> value)
-         ~f:(fun (~value, ~alpha) child ->
+         ~init:(Int.min_value, alpha)
+         ~finish:(fun (value, _alpha) -> value)
+         ~f:(fun (value, alpha) child ->
            let value = Int.max value (alpha_beta child (depth - 1) alpha beta) in
            let alpha = Int.max alpha value in
-           if value >= beta then Stop value else Continue (~value, ~alpha))
+           if value >= beta then Stop value else Continue (value, alpha))
      | O ->
        List.fold_until
          (children node ~sort_by_whose_turn:whose_turn)
-         ~init:(~value:Int.max_value, ~beta)
-         ~finish:(fun (~value, ~beta:_) -> value)
-         ~f:(fun (~value, ~beta) child ->
+         ~init:(Int.max_value, beta)
+         ~finish:(fun (value, _beta) -> value)
+         ~f:(fun (value, beta) child ->
            let value = Int.min value (alpha_beta child (depth - 1) alpha beta) in
            let beta = Int.min beta value in
-           if value <= alpha then Stop value else Continue (~value, ~beta)))
+           if value <= alpha then Stop value else Continue (value, beta)))
   | _ -> heuristic_value node
 ;;
 

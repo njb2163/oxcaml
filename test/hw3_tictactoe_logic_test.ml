@@ -111,7 +111,7 @@ let pretty_print_board ({ board; rows; columns; decision; _ } : Game_state.t) =
     |> List.map ~f:(fun column ->
       match Map.find board { row; column } with
       | None -> " "
-      | Some player -> Player_kind.to_string player)
+      | Some player -> Player_kind.sexp_of_t player |> Sexp.to_string)
     |> String.concat ~sep:"|"
     |> print_endline;
     if row < rows - 1 then print_endline row_separator
@@ -162,7 +162,8 @@ let%expect_test "Game_state.make_move: tictactoe X wins vertically" =
     ; { row = 1; column = 1 }
     ; { row = 2; column = 2 }
     ];
-  [%expect {|
+  [%expect
+    {|
      | |X
     -----
     O|O|X
@@ -181,7 +182,8 @@ let%expect_test "Game_state.make_move: tictactoe X wins horizontally" =
     ; { row = 1; column = 1 }
     ; { row = 0; column = 2 }
     ];
-  [%expect {|
+  [%expect
+    {|
     X|X|X
     -----
     O|O|
@@ -201,7 +203,8 @@ let%expect_test "Game_state.make_move: tictactoe O wins horizontally" =
     ; { row = 2; column = 2 }
     ; { row = 1; column = 2 }
     ];
-  [%expect {|
+  [%expect
+    {|
     X|X|
     -----
     O|O|O
@@ -221,7 +224,8 @@ let%expect_test "Game_state.make_move: tictactoe O wins diagonally" =
     ; { row = 2; column = 2 }
     ; { row = 0; column = 2 }
     ];
-  [%expect {|
+  [%expect
+    {|
     X|X|O
     -----
      |O|
@@ -244,7 +248,8 @@ let%expect_test "Game_state.make_move: tictactoe stalemate" =
     ; { row = 0; column = 2 }
     ; { row = 2; column = 2 }
     ];
-  [%expect {|
+  [%expect
+    {|
     X|X|O
     -----
     O|O|X
@@ -335,64 +340,67 @@ let random_walk (initial_state : Game_state.t) ~random_seed =
 
 let%expect_test "TicTacToe random walk till terminal state" =
   random_walk initial_3x3 ~random_seed:1;
-  [%expect {|
+  [%expect
+    {|
+    O|O|X
+    -----
+     |X|
+    -----
+    X|O|X
+    (Winner X)
+    |}];
+  random_walk initial_3x3 ~random_seed:3;
+  [%expect
+    {|
     X|X|O
     -----
     O|O|X
     -----
-    X|O|X
+    X|X|O
     Stalemate
     |}];
-  random_walk initial_3x3 ~random_seed:3;
-  [%expect {|
-    O|X|X
-    -----
-    O|X|O
-    -----
-    O| |X
-    (Winner O)
-    |}];
   random_walk initial_3x3 ~random_seed:1234;
-  [%expect {|
-    O|O|
+  [%expect
+    {|
+    X| |O
     -----
-    X|O|
+    X| |O
     -----
-    X|X|X
+    X|O|X
     (Winner X)
     |}];
   random_walk initial_gomoku ~random_seed:1;
   [%expect
     {|
-     | |O|O| | |O| | | | | |O|X|
+     | |O| |X|X|X| | | |O| | |X|
     -----------------------------
-    O|X|X| |X|O| | | | | | | | |
+    O|O| | | |O| | |X|X|X|O|X| |X
     -----------------------------
-     |X|X| | |O|O|O|O|X| | |O|O|O
+    X| | | |O|X| |X| | | | | | |X
     -----------------------------
-    X| | |X| | |O|O| |O| |X| | |
+     | | |O| |X|O| | | |X| | | |X
     -----------------------------
-     | |X|O| | | | | | | |X| | |
+     | | |O| | | |O|O| | |O| | |X
     -----------------------------
-     | | |X|O| | | | | | | | | |X
+    O|X|X|X|X|X| | |O| | |X| | |
     -----------------------------
-    O| | | | |O| |X| | | | | | |
+     |O| | | | | |O| |O|O|O|O| |X
     -----------------------------
-    X| | |X| |O| | | | | |X|O| |
+    X| | |O| |O|O| |X| | | | |O|O
     -----------------------------
-     | |X| |X| | | | |O| | | | |O
+     | | |O| |X|O|O| |O|X| | | |
     -----------------------------
-     | | | | |X|O| |O|X| | |O|X|
+    O| |X| |O|O| | | | | | | | |
     -----------------------------
-    X| |X|X|X|X|X| |O| |O| |O| |
+     |X| |O| | | |X|O| |X| | |X|
     -----------------------------
-    X|O| | | | | | | | | |O| | |
+     | | | |X|X| | |O| |X|O| |X|
     -----------------------------
-     | | |O| |O|X|X|X| |O| | |X|
+     |O| | | | | | |O|X|X|X| | |
     -----------------------------
-    X| | | |O|X| | | |X|O| | | |O
+    O| |X| |X|X| | |X| | |O| | |O
     -----------------------------
-     | |O| | |X|O|X|X| | | | | |X
+     |O|O|X| | |X| | | | | | | |O
     (Winner X)
     |}]
 ;;

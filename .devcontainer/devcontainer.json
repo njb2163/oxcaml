@@ -1,6 +1,6 @@
 {
         "build": {      "dockerfile": "Dockerfile" },
-        "name": "OxCaml Playground",
+        "name": "OCaml TicTacToe",
         "customizations": {
                 "vscode": {
                         "extensions": [
