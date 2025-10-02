@@ -48,15 +48,7 @@ module Card = struct
     }
   [@@deriving sexp, compare, equal]
 
-  let remove_card_once (c : t) (hand : t list) =
-    (* Recursively remove one card from a hand *)
-    let before, after = List.split_while hand ~f:(fun x -> not (equal x c)) in
-    match after with
-    | [] -> None
-    | _ :: tl -> Some (before @ tl)
-  ;;
-
-  let is_subset to_remove hand =
+  let is_subset (to_remove : t list) (hand : t list) =
     List.for_all to_remove ~f:(fun c -> List.mem hand c ~equal)
   ;;
 
@@ -70,7 +62,7 @@ end
 
 module Player = struct
   type t =
-    { id : Player_Idx.t
+    { idx : Player_Idx.t
     ; name : string
     ; hand : Card.t list
     ; role : Role.t
@@ -83,13 +75,13 @@ module Player = struct
 
   let lookup_player_exn (players : t list) (id : Player_Idx.t) =
     (* Look up a player by id and throw an exception if not found *)
-    List.find_exn players ~f:(fun p -> p.id = id)
+    List.find_exn players ~f:(fun p -> p.idx = id)
   ;;
 
   let update_player_hand (players : t list) ~(id : Player_Idx.t) ~(new_hand : Card.t list)
     =
     (* Update a player's hand in the list of players. Return all other player's hands as they were. *)
-    List.map players ~f:(fun p -> if p.id = id then { p with hand = new_hand } else p)
+    List.map players ~f:(fun p -> if p.idx = id then { p with hand = new_hand } else p)
   ;;
 end
 
@@ -117,6 +109,7 @@ module Rules = struct
     ; starting_card : Card.t option
     ; max_players : int
     }
+  [@@deriving sexp, compare, equal]
 end
 
 module Group = struct
@@ -187,13 +180,10 @@ end
 
 module Decision = struct
   type t =
-    | In_progress of
-        { whose_turn : Player_Idx.t
-        ; starting_player :
-            Player_Idx.t option (* Who played the first card in the trick *)
-        }
+    | In_progress of { whose_turn : Player_Idx.t }
     | Round_Over of { round_ranking : Player_Idx.t list }
     | Game_Over of { final_ranking : (Player_Idx.t * Role.t) list }
+  [@@deriving sexp, compare, equal]
 end
 
 module Table_State = struct
@@ -205,6 +195,7 @@ module Table_State = struct
     ; current_trick : (Player_Idx.t * Group.t) list
       (* plays in the current trick, different from history since it clears with the trick *)
     }
+  [@@deriving sexp, compare, equal]
 end
 
 module Game_State = struct
@@ -218,17 +209,21 @@ module Game_State = struct
     ; decision : Decision.t
     ; finished_order : Player_Idx.t list
     }
+  [@@deriving sexp, compare, equal]
 
   let start_new_trick_from (gs : t) ~(starter : Player_Idx.t) : t =
     { gs with
-      table =
+      discard_pile =
+        gs.discard_pile
+        @ List.concat_map gs.table.current_trick ~f:(fun (_, g) -> g.cards)
+    ; table =
         { current_requirement = None
-        ; last_advancer = Some starter
+        ; last_advancer = None
         ; passes_in_row = 0
         ; history = gs.table.history
         ; current_trick = []
         }
-    ; decision = In_progress { whose_turn = starter; starting_player = Some starter }
+    ; decision = In_progress { whose_turn = starter }
     }
   ;;
 
@@ -277,8 +272,8 @@ module Game_State = struct
   let active_player_idxs (t : t) : Player_Idx.t list =
     (* Get a list of player ids who are still active (not finished) *)
     t.players
-    |> List.filter ~f:(fun p -> not (player_idx_is_finished t p.id))
-    |> List.map ~f:(fun p -> p.id)
+    |> List.filter ~f:(fun p -> not (player_idx_is_finished t p.idx))
+    |> List.map ~f:(fun p -> p.idx)
   ;;
 
   let next_active_after (t : t) (from_id : Player_Idx.t) : Player_Idx.t option =
@@ -294,19 +289,17 @@ module Game_State = struct
     step 1
   ;;
 
-  let make_move (t : t) (move : Play.t) : (t, Move_error.t) Result.t =
+  let make_move (t : t) (player : Player.t) (move : Play.t) : (t, Move_error.t) Result.t =
     match t.decision with
     | Round_Over _ | Game_Over _ ->
       Error Move_error.Game_is_over (* Game is over, no moves can be made *)
-    | In_progress turn_state ->
+    | In_progress _ ->
       if
         not (Poly.equal t.phase Playing)
         (* Need to be in the Playing phase to play cards *)
       then Error Move_error.Illegal_phase
       else (
         (* Otherwise, process the move which is either a Play or Pass *)
-        let player_idx = turn_state.whose_turn in
-        let player = Player.lookup_player_exn t.players player_idx in
         match move with
         | Pass ->
           if
@@ -317,7 +310,7 @@ module Game_State = struct
             (* Increment passes in a row *)
             let passes_in_row = t.table.passes_in_row + 1 in
             (* Update history with the current move*)
-            let history = (player_idx, Play.Pass) :: t.table.history in
+            let history = (player.idx, Play.Pass) :: t.table.history in
             (* Count how many active players remain *)
             let active_count = List.length (active_player_idxs t) in
             (* Check if everyone else has passed, which ends the trick *)
@@ -337,7 +330,7 @@ module Game_State = struct
               let raw_starter =
                 match t.table.last_advancer with
                 | Some id -> id
-                | None -> player_idx
+                | None -> player.idx
                 (* Should be caught above, default to player_idx *)
               in
               (* If last_advancer went out, hand the lead to the next active after them *)
@@ -358,14 +351,14 @@ module Game_State = struct
             else (
               (* Otherwise, normal Pass to the next player *)
               let next_id =
-                match next_active_after t player_idx with
+                match next_active_after t player.idx with
                 | Some nxt -> nxt
-                | None -> player_idx
+                | None -> player.idx
               in
               Ok
                 { t with
                   table = { t.table with passes_in_row; history }
-                ; decision = In_progress { turn_state with whose_turn = next_id }
+                ; decision = In_progress { whose_turn = next_id }
                 }))
         | Play g ->
           (* Check that the cards being played are permitted based on the game rules *)
@@ -375,7 +368,7 @@ module Game_State = struct
             let is_players_turn =
               (* Check that the Play is being made by the Player whose turn it is *)
               match t.decision with
-              | In_progress s -> Poly.equal player_idx s.whose_turn
+              | In_progress s -> Int.equal player.idx s.whose_turn
               | _ -> false
             in
             (* Additionally, is the play completing a set *)
@@ -404,21 +397,21 @@ module Game_State = struct
                  | Ok () ->
                    (* Remove played cards from the player's hand *)
                    let players' =
-                     Player.update_player_hand t.players ~id:player_idx ~new_hand
+                     Player.update_player_hand t.players ~id:player.idx ~new_hand
                    in
                    (* Update the history *)
-                   let history = (player_idx, Play.Play g) :: t.table.history in
+                   let history = (player.idx, Play.Play g) :: t.table.history in
                    (* Update the current trick *)
-                   let current_trick' = (player_idx, g) :: t.table.current_trick in
+                   let current_trick' = (player.idx, g) :: t.table.current_trick in
                    (* If player’s hand emptied by the play, append them to finished_order. *)
                    let finished_order' =
                      let just_finished =
-                       (not (List.mem t.finished_order player_idx ~equal:Int.equal))
+                       (not (List.mem t.finished_order player.idx ~equal:Int.equal))
                        && List.is_empty new_hand
                      in
                      (* TODO: add case where last card as two results in loss *)
                      if just_finished
-                     then t.finished_order @ [ player_idx ]
+                     then t.finished_order @ [ player.idx ]
                      else t.finished_order
                    in
                    (* Compute how many active remain after this play *)
@@ -453,7 +446,7 @@ module Game_State = struct
                       (* Update the table state *)
                       let table' =
                         { Table_State.current_requirement = Some g
-                        ; last_advancer = Some player_idx
+                        ; last_advancer = Some player.idx
                         ; passes_in_row = 0
                         ; history
                         ; current_trick = current_trick'
@@ -473,13 +466,13 @@ module Game_State = struct
                           if List.is_empty new_hand
                           then (
                             (* player went out on the clear; go to the next active player *)
-                            match next_active_after t_tmp player_idx with
+                            match next_active_after t_tmp player.idx with
                             | Some nxt -> nxt
                             | None ->
-                              player_idx
+                              player.idx
                               (* won’t be used; round would have ended above *)
                               (* Otherwise, player who cleared starts *))
-                          else player_idx
+                          else player.idx
                         in
                         let t1 =
                           { t with
@@ -493,9 +486,9 @@ module Game_State = struct
                       else (
                         (* Regular advance in turn order *)
                         let next_id =
-                          match next_active_after t_tmp player_idx with
+                          match next_active_after t_tmp player.idx with
                           | Some nxt -> nxt
-                          | None -> player_idx
+                          | None -> player.idx
                           (* defensive; round end would have triggered above *)
                         in
                         Ok
@@ -503,8 +496,7 @@ module Game_State = struct
                             players = players'
                           ; table = table'
                           ; finished_order = finished_order'
-                          ; decision =
-                              In_progress { turn_state with whose_turn = next_id }
+                          ; decision = In_progress { whose_turn = next_id }
                           }))))))
   ;;
 end
