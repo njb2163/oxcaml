@@ -92,11 +92,11 @@ let%expect_test "test_completion" =
 ;;
 
 (* Test basic move selection when computer can start a trick *)
-let%expect_test "computer_chooses_lowest_card_when_starting" =
+let%expect_test "computer_chooses_last_card_in_hand_when_starting" =
   let c1 = make_card Card_Rank.Five Card_Suit.Heart in
   let c2 = make_card Card_Rank.Three Card_Suit.Spade in
   let c3 = make_card Card_Rank.Seven Card_Suit.Diamond in
-  let computer = make_player ~idx:0 ~name:"Computer" ~hand:[ c1; c2; c3 ] in
+  let computer = make_player ~idx:0 ~name:"Computer" ~hand:[ c3; c2; c1 ] in
   let gs =
     make_game_state
       ~players:[ computer ]
@@ -108,7 +108,21 @@ let%expect_test "computer_chooses_lowest_card_when_starting" =
   [%expect
     {|
       ("Computer chooses this move"
-       (move (Play ((cards (((rank Three) (suit Spade)))))))) |}]
+       (move (Play ((cards (((rank Five) (suit Heart)))))))) |}];
+  let computer = { (computer : Player.t) with hand = [ c2; c1 ; c3 ] } in
+  let gs =
+    make_game_state
+      ~players:[ computer ]
+      ~phase:Phase.Playing
+      ~table:base_table
+      ~decision:(Decision.In_progress { whose_turn = 0 })
+  in
+  print_computer_move gs computer;
+  [%expect
+    {|
+      ("Computer chooses this move"
+       (move (Play ((cards (((rank Seven) (suit Diamond)))))))) |}];
+
 ;;
 
 (* Test computer chooses completion over regular play *)
@@ -142,15 +156,30 @@ let%expect_test "computer_chooses_completion_when_possible" =
   let valid_groups = valid_groups gs (get_all_possible_groups computer.hand) in
   print_s [%message (valid_groups : Group.t list)];
   [%expect {|
-    (valid_groups
-     (((cards (((rank Five) (suit Spade)))))
-      ((cards
+    (valid_groups (((cards (((rank Five) (suit Spade))))))) |}];
+  let completion_groups = completion_groups gs possible_groups in
+  print_s [%message (completion_groups : Group.t list)];
+  [%expect {|
+    (completion_groups
+     (((cards
+        (((rank Five) (suit Spade)) ((rank Five) (suit Diamond))
+         ((rank Five) (suit Club))))))) |}];
+  let chosen_group = choose_group completion_groups valid_groups in
+  print_s [%message (chosen_group : Group.t option)];
+  [%expect {|
+    (chosen_group
+     (((cards
         (((rank Five) (suit Spade)) ((rank Five) (suit Diamond))
          ((rank Five) (suit Club))))))) |}];
   print_computer_move gs computer;
   [%expect
     {|
-      ("Computer chooses this move" (move Pass)) |}]
+      ("Computer chooses this move"
+       (move
+        (Play
+         ((cards
+           (((rank Five) (suit Spade)) ((rank Five) (suit Diamond))
+            ((rank Five) (suit Club)))))))) |}]
 ;;
 
 (* Test computer respects clear_on_two rule *)
@@ -158,7 +187,7 @@ let%expect_test "computer_avoids_starting_with_two_when_clear_on_two_enabled" =
   let c1 = make_card Card_Rank.Two Card_Suit.Heart in
   let c2 = make_card Card_Rank.Three Card_Suit.Spade in
   let c3 = make_card Card_Rank.Four Card_Suit.Diamond in
-  let computer = make_player ~idx:0 ~name:"Computer" ~hand:[ c1; c2; c3 ] in
+  let computer = make_player ~idx:0 ~name:"Computer" ~hand:[ c3; c2; c1 ] in
   let gs =
     make_game_state
       ~players:[ computer ]

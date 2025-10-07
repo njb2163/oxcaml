@@ -9,4 +9,5 @@ val is_close_to_winning : Card.t list -> bool
 val get_computer_move : Game_State.t -> Player.t -> Play.t option
 val computer_player_move : Game_State.t -> Player.t -> Play.t
 val valid_groups : Game_State.t -> Group.t list -> Group.t list
-val choose_group : Game_State.t -> Group.t list -> Group.t list -> Group.t option
+val choose_group : Group.t list -> Group.t list -> Group.t option
+val completion_groups : Game_State.t -> Group.t list -> Group.t list
