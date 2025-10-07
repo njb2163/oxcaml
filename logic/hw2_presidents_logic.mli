@@ -175,8 +175,7 @@ end
 
 module Table_State : sig
   type t =
-    { current_requirement : Group.t option
-    ; last_advancer : Player_Idx.t option
+    { last_advancer : Player_Idx.t option
     ; passes_in_row : int
     ; history : (Player_Idx.t * Play.t) list
     ; current_trick : (Player_Idx.t * Group.t) list
@@ -186,6 +185,7 @@ module Table_State : sig
   val sexp_of_t : t -> Sexplib0.Sexp.t
   val compare : t -> t -> int
   val equal : t -> t -> bool
+  val current_requirement : t -> Group.t option
 end
 
 module Game_State : sig

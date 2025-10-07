@@ -58,21 +58,8 @@ let group_badness_score (group : Group.t) : int =
     base_value + size_penalty
 ;;
 
-(* Check if we're close to winning (few cards left) *)
-let is_close_to_winning (hand : Card.t list) : bool = List.length hand <= 3
-
-(* Get the best move for the computer player *)
-let get_computer_move (game_state : Game_State.t) (player : Player.t) : Play.t option =
-  match game_state.decision with
-  | In_progress { whose_turn } when Int.equal whose_turn player.idx ->
-    let possible_groups = get_all_possible_groups player.hand in
-    (* Strategy: Try to complete sets first, then play low-value cards *)
-    let completion_groups =
-      List.filter possible_groups ~f:(fun group ->
-        Game_State.is_completion game_state group)
-    in
-    let valid_groups =
-      match game_state.table.current_requirement with
+let valid_groups (game_state : Game_State.t) (possible_groups: Group.t list) =
+      match Table_State.current_requirement game_state.table with
       | None ->
         (* Can play any group, but avoid starting with 2s if clear_on_two is enabled *)
         if game_state.rules.clear_on_two
@@ -85,19 +72,24 @@ let get_computer_move (game_state : Game_State.t) (player : Player.t) : Play.t o
       | Some req ->
         (* Must meet the current requirement *)
         List.filter possible_groups ~f:(fun group ->
-          Group.meets_requirement ~rules:game_state.rules ~current_req:(Some req) group
+          if Game_State.is_completion game_state group
+          then true
+          else
+          Group.meets_requirement ~rules:game_state.rules ~current_req:(Some req) group 
           |> Result.is_ok)
-    in
-    (* Decision logic *)
-    let chosen_group =
-      (* Priority 1: Complete a 4-of-a-kind set if possible *)
+
+(* Check if we're close to winning (few cards left) *)
+let is_close_to_winning (hand : Card.t list) : bool = List.length hand <= 3
+
+let choose_group (game_state : Game_State.t) (completion_groups: Group.t list) (valid_groups: Group.t list) =
+  (* Priority 1: Complete a 4-of-a-kind set if possible *)
       if not (List.is_empty completion_groups)
       then (
         let valid_completions =
           List.filter completion_groups ~f:(fun group ->
             Group.meets_requirement
               ~rules:game_state.rules
-              ~current_req:game_state.table.current_requirement
+              ~current_req:(Table_State.current_requirement game_state.table)
               group
             |> Result.is_ok)
         in
@@ -112,12 +104,26 @@ let get_computer_move (game_state : Game_State.t) (player : Player.t) : Play.t o
         in
         Some (List.hd_exn sorted_groups))
       else None
+
+(* Get the best move for the computer player *)
+let get_computer_move (game_state : Game_State.t) (player : Player.t) : Play.t option =
+  match game_state.decision with
+  | In_progress { whose_turn } when Int.equal whose_turn player.idx ->
+    let possible_groups = get_all_possible_groups player.hand in
+    (* Strategy: Try to complete sets first, then play low-value cards *)
+    let completion_groups =
+      List.filter possible_groups ~f:(fun group ->
+        Game_State.is_completion game_state group)
+    in
+    let valid_groups = valid_groups game_state possible_groups in
+    (* Decision logic *)
+    let chosen_group = choose_group game_state completion_groups valid_groups
     in
     (match chosen_group with
      | Some group -> Some (Play.Play group)
      | None ->
        (* If we can't play anything, we must pass (if there's a requirement) *)
-       if Option.is_some game_state.table.current_requirement
+       if Option.is_some (Table_State.current_requirement game_state.table)
        then Some Play.Pass
        else None)
   (* Not the computer's turn *)
