@@ -602,14 +602,13 @@ let%expect_test "Test valid passing back to last advancer" =
   |}]
 ;;
 
-
 let%expect_test "Test clear on two" =
   let c1 = make_card Card_Rank.Five Card_Suit.Heart in
   let c2 = make_card Card_Rank.Seven Card_Suit.Spade in
   let c3 = make_card Card_Rank.Two Card_Suit.Diamond in
   let c4 = make_card Card_Rank.Four Card_Suit.Club in
   let p0 = make_player ~idx:0 ~name:"P0" ~hand:[ c1; c2 ] in
-  let p1 = make_player ~idx:1 ~name:"P1" ~hand:[ c3 ; c4 ] in
+  let p1 = make_player ~idx:1 ~name:"P1" ~hand:[ c3; c4 ] in
   let gs =
     make_game_state
       ~players:[ p0; p1 ]
@@ -638,7 +637,7 @@ let%expect_test "Test clear on two" =
           (current_trick ((0 ((cards (((rank Five) (suit Heart))))))))))
         (phase Playing) (decision (In_progress (whose_turn 1)))
         (finished_order ()))) |}];
-  let play2 = Game_State.make_move (ok_exn play1) p1 (Play { Group.cards = [c3]}) in
+  let play2 = Game_State.make_move (ok_exn play1) p1 (Play { Group.cards = [ c3 ] }) in
   print_s [%sexp (play2 : (Game_State.t, Move_error.t) Result.t)];
   [%expect
     {|
@@ -659,5 +658,5 @@ let%expect_test "Test clear on two" =
         (phase Playing) (decision (In_progress (whose_turn 1)))
         (finished_order ())))
 
-  |}];
+  |}]
 ;;

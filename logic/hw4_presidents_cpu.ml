@@ -21,14 +21,12 @@ let rank_value (rank : Card_Rank.t) : int =
   | Two -> 15 (* Two is highest in Presidents *)
 ;;
 
-(* Count how many cards of each rank a player has *)
 let count_cards_by_rank (hand : Card.t list) : (Card_Rank.t * int) list =
-  let rank_counts = Hashtbl.create (module Card_Rank) in
-  List.iter hand ~f:(fun card ->
-    Hashtbl.update rank_counts card.rank ~f:(function
-      | None -> 1
-      | Some count -> count + 1));
-  Hashtbl.to_alist rank_counts
+  List.fold hand ~init:[] ~f:(fun acc card ->
+    match List.Assoc.find acc card.rank ~equal:Card_Rank.equal with
+    | Some existing_count ->
+      List.Assoc.add acc card.rank (existing_count + 1) ~equal:Card_Rank.equal
+    | None -> (card.rank, 1) :: acc)
 ;;
 
 (* Check if a group would complete a 4-of-a-kind set *)
@@ -43,12 +41,14 @@ let get_all_possible_groups (hand : Card.t list) : Group.t list =
     (* Generate all possible group sizes from 1 to count *)
     List.range 1 (count + 1)
     |> List.filter_map ~f:(fun group_size ->
-         if group_size <= count
-         then (
-           let cards_of_rank = List.filter hand ~f:(fun card -> Card_Rank.equal card.rank rank) in
-           let selected_cards = List.take cards_of_rank group_size in
-           Some { Group.cards = selected_cards })
-         else None))
+      if group_size <= count
+      then (
+        let cards_of_rank =
+          List.filter hand ~f:(fun card -> Card_Rank.equal card.rank rank)
+        in
+        let selected_cards = List.take cards_of_rank group_size in
+        Some { Group.cards = selected_cards })
+      else None))
 ;;
 
 (* Calculate the "badness" score of a group - lower is better *)
@@ -64,62 +64,68 @@ let group_badness_score (group : Group.t) : int =
 ;;
 
 (* Check if we're close to winning (few cards left) *)
-let is_close_to_winning (hand : Card.t list) : bool =
-  List.length hand <= 3
-;;
+let is_close_to_winning (hand : Card.t list) : bool = List.length hand <= 3
 
 (* Get the best move for the computer player *)
 let get_computer_move (game_state : Game_State.t) (player : Player.t) : Play.t option =
   match game_state.decision with
   | In_progress { whose_turn } when Int.equal whose_turn player.idx ->
     let possible_groups = get_all_possible_groups player.hand in
-    
     (* Strategy: Try to complete sets first, then play low-value cards *)
-    let completion_groups = List.filter possible_groups ~f:(fun group -> 
-      would_complete_set game_state group) in
-    
-    let valid_groups = match game_state.table.current_requirement with
-      | None -> 
+    let completion_groups =
+      List.filter possible_groups ~f:(fun group -> would_complete_set game_state group)
+    in
+    let valid_groups =
+      match game_state.table.current_requirement with
+      | None ->
         (* Can play any group, but avoid starting with 2s if clear_on_two is enabled *)
         if game_state.rules.clear_on_two
-        then List.filter possible_groups ~f:(fun group ->
-          match Group.rank group with
-          | Some Card_Rank.Two -> false
-          | _ -> true)
+        then
+          List.filter possible_groups ~f:(fun group ->
+            match Group.rank group with
+            | Some Card_Rank.Two -> false
+            | _ -> true)
         else possible_groups
-      | Some req -> 
+      | Some req ->
         (* Must meet the current requirement *)
         List.filter possible_groups ~f:(fun group ->
           Group.meets_requirement ~rules:game_state.rules ~current_req:(Some req) group
-          |> Result.is_ok) in
-    
+          |> Result.is_ok)
+    in
     (* Decision logic *)
-    let chosen_group = 
+    let chosen_group =
       (* Priority 1: Complete a 4-of-a-kind set if possible *)
       if not (List.is_empty completion_groups)
       then (
-        let valid_completions = List.filter completion_groups ~f:(fun group ->
-          Group.meets_requirement ~rules:game_state.rules 
-            ~current_req:game_state.table.current_requirement group
-          |> Result.is_ok) in
+        let valid_completions =
+          List.filter completion_groups ~f:(fun group ->
+            Group.meets_requirement
+              ~rules:game_state.rules
+              ~current_req:game_state.table.current_requirement
+              group
+            |> Result.is_ok)
+        in
         if not (List.is_empty valid_completions)
         then Some (List.hd_exn valid_completions)
-        else None)
-      (* Priority 2: Play valid groups, preferring lower "badness" scores *)
+        else None (* Priority 2: Play valid groups, preferring lower "badness" scores *))
       else if not (List.is_empty valid_groups)
       then (
-        let sorted_groups = List.sort valid_groups ~compare:(fun g1 g2 ->
-          Int.compare (group_badness_score g1) (group_badness_score g2)) in
+        let sorted_groups =
+          List.sort valid_groups ~compare:(fun g1 g2 ->
+            Int.compare (group_badness_score g1) (group_badness_score g2))
+        in
         Some (List.hd_exn sorted_groups))
-      else None in
-    
+      else None
+    in
     (match chosen_group with
      | Some group -> Some (Play.Play group)
-     | None -> 
+     | None ->
        (* If we can't play anything, we must pass (if there's a requirement) *)
        if Option.is_some game_state.table.current_requirement
        then Some Play.Pass
        else None)
+  (* Not the computer's turn *)
+  | In_progress _ -> None
   | _ -> None
 ;;
 
@@ -129,4 +135,3 @@ let computer_player_move (game_state : Game_State.t) (player : Player.t) : Play.
   | Some move -> move
   | None -> Play.Pass (* Default fallback *)
 ;;
-

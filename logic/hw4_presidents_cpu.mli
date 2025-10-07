@@ -1,12 +1,18 @@
-(** Computer player logic for Presidents card game *)
+open! Core
+open Hw2_presidents_logic
 
-(** [computer_player_move game_state player] returns the move that the computer
-    player should make given the current game state and player information.
-    
-    The computer uses a heuristic-based strategy:
-    - Prioritizes completing 4-of-a-kind sets
-    - Prefers playing lower-value cards over higher-value ones
-    - Avoids starting with 2s when clear_on_two rule is enabled
-    - Passes when no valid moves are available *)
-val computer_player_move : Game_State.t -> Player.t -> Play.t
+val rank_value : Card_Rank.t -> int
 
+val count_cards_by_rank: Card.t list -> (Card_Rank.t * int) list
+
+val would_complete_set: Game_State.t -> Group.t -> bool
+
+val get_all_possible_groups: Card.t list -> Group.t list
+
+val group_badness_score: Group.t -> int
+
+val is_close_to_winning: Card.t list -> bool
+
+val get_computer_move: Game_State.t -> Player.t -> Play.t option
+
+val computer_player_move: Game_State.t -> Player.t -> Play.t
