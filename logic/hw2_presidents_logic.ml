@@ -188,14 +188,19 @@ end
 
 module Table_State = struct
   type t =
-    { current_requirement : Group.t option
-    ; last_advancer : Player_Idx.t option (* Who was the last one to not pass *)
+    { last_advancer : Player_Idx.t option (* Who was the last one to not pass *)
     ; passes_in_row : int (* How many times have there been passes in a row *)
     ; history : (Player_Idx.t * Play.t) list (* List of previous plays *)
     ; current_trick : (Player_Idx.t * Group.t) list
       (* plays in the current trick, different from history since it clears with the trick *)
     }
   [@@deriving sexp, compare, equal]
+
+  let current_requirement (table: t) : Group.t option =
+    match table.current_trick with 
+    | [] -> None
+    | (_, g) :: _ -> Some g
+
 end
 
 module Game_State = struct
@@ -217,8 +222,7 @@ module Game_State = struct
         gs.discard_pile
         @ List.concat_map gs.table.current_trick ~f:(fun (_, g) -> g.cards)
     ; table =
-        { current_requirement = None
-        ; last_advancer = None
+        { last_advancer = None
         ; passes_in_row = 0
         ; history = gs.table.history
         ; current_trick = []
@@ -229,21 +233,19 @@ module Game_State = struct
 
   let current_run_count (t : t) ~(rank : Card_Rank.t) : int =
     (* Count how many cards of a given rank are in the current trick *)
-    let rec loop acc = function
-      | [] -> acc (* End of list, return accumulated count *)
-      | (_pidx, g) :: rest ->
-        (match Group.rank g, rank with
-         | Some r1, r2 ->
-           if Card_Rank.equal r1 r2 then loop (acc + Group.count g) rest else acc
-         | None, _ -> acc)
-      (* Increment accumulator by 1 for each card in the trick that matches the rank being searched for.
-      Otherwise, break and return the accumulator *)
-    in
-    loop 0 t.table.current_trick
+    List.fold_until
+      t.table.current_trick
+      ~init:0
+      ~f:(fun acc (_, g) ->
+        match Group.rank g with
+        | Some r ->
+          if Card_Rank.equal r rank then Continue (acc + Group.count g) else Stop acc
+        | None -> Stop acc)
+      ~finish:Fn.id
   ;;
 
   let is_completion (t : t) (g : Group.t) : bool =
-    match t.table.current_requirement with
+    match Table_State.current_requirement t.table with
     | None ->
       if Group.count g = 4
       then true
@@ -303,7 +305,7 @@ module Game_State = struct
         match move with
         | Pass ->
           if
-            Option.is_none t.table.current_requirement
+            Option.is_none (Table_State.current_requirement t.table)
             (* Players cannot Pass when there are no cards on the table *)
           then Error Move_error.Illegal_pass_when_no_requirement
           else (
@@ -388,7 +390,7 @@ module Game_State = struct
                   else
                     Group.meets_requirement
                       ~rules:t.rules
-                      ~current_req:t.table.current_requirement
+                      ~current_req:(Table_State.current_requirement t.table)
                       g
                 in
                 (match requirement_ok with
@@ -425,8 +427,7 @@ module Game_State = struct
                     | [ last_id ] ->
                       let final_ranking = finished_order' @ [ last_id ] in
                       let table' =
-                        { Table_State.current_requirement = None
-                        ; last_advancer = None
+                        { Table_State.last_advancer = None
                         ; passes_in_row = 0
                         ; history
                         ; current_trick = current_trick'
@@ -445,8 +446,7 @@ module Game_State = struct
 
                       (* Update the table state *)
                       let table' =
-                        { Table_State.current_requirement = Some g
-                        ; last_advancer = Some player.idx
+                        {Table_State.last_advancer = Some player.idx
                         ; passes_in_row = 0
                         ; history
                         ; current_trick = current_trick'
