@@ -39,6 +39,59 @@ let print_computer_move game_state player =
   print_s [%message "Computer chooses this move" (move : Play.t)]
 ;;
 
+(* Test getting all possible groups *)
+let%expect_test "get_all_possible_groups" =
+  let c1 = make_card Card_Rank.Six Card_Suit.Heart in
+  let c2 = make_card Card_Rank.Six Card_Suit.Spade in
+  let c3 = make_card Card_Rank.Six Card_Suit.Diamond in
+  let c4 = make_card Card_Rank.Two Card_Suit.Club in
+  let hand = [ c1; c2; c3; c4 ] in
+  print_s [%message "All possible groups" (get_all_possible_groups hand : Group.t list)];
+  [%expect
+    {|
+      ("All possible groups"
+       ("get_all_possible_groups hand"
+        (((cards (((rank Two) (suit Club))))) ((cards (((rank Six) (suit Heart)))))
+         ((cards (((rank Six) (suit Heart)) ((rank Six) (suit Spade)))))
+         ((cards
+           (((rank Six) (suit Heart)) ((rank Six) (suit Spade))
+            ((rank Six) (suit Diamond))))))))
+|}]
+;;
+
+(* Test computer chooses completion over regular play *)
+let%expect_test "test_completion" =
+  let c1 = make_card Card_Rank.Five Card_Suit.Heart in
+  let c2 = make_card Card_Rank.Five Card_Suit.Spade in
+  let c3 = make_card Card_Rank.Five Card_Suit.Diamond in
+  let c4 = make_card Card_Rank.Five Card_Suit.Club in
+  let c5 = make_card Card_Rank.Three Card_Suit.Heart in
+  let computer = make_player ~idx:0 ~name:"Computer" ~hand:[ c2; c3; c4; c5 ] in
+  let base_req =  { Group.cards = [ c1 ] } in
+  let table_with_requirement =
+    { base_table with current_requirement = Some base_req ; current_trick = [(0, base_req)] }
+  in
+  let gs =
+    make_game_state
+      ~players:[ computer ]
+      ~phase:Phase.Playing
+      ~table:table_with_requirement
+      ~decision:(Decision.In_progress { whose_turn = 0 })
+  in
+  let group = { Group.cards = [ c2; c3; c4 ] } in
+  let run_ct = Game_State.current_run_count gs ~rank:Card_Rank.Five in
+  print_s [%message (run_ct : int)];
+  [%expect {| (run_ct 1) |}];
+  let would_complete = Game_State.is_completion gs group in
+  print_s [%message (group : Group.t) "Would complete set" (would_complete: bool)];
+  [%expect {|
+    ((group
+      ((cards
+        (((rank Five) (suit Spade)) ((rank Five) (suit Diamond))
+         ((rank Five) (suit Club))))))
+     "Would complete set" (would_complete true)) |}]
+;;
+
 (* Test basic move selection when computer can start a trick *)
 let%expect_test "computer_chooses_lowest_card_when_starting" =
   let c1 = make_card Card_Rank.Five Card_Suit.Heart in
@@ -68,7 +121,7 @@ let%expect_test "computer_chooses_completion_when_possible" =
   let c5 = make_card Card_Rank.Three Card_Suit.Heart in
   let computer = make_player ~idx:0 ~name:"Computer" ~hand:[ c2; c3; c4; c5 ] in
   let table_with_requirement =
-    { base_table with current_requirement = Some { Group.cards = [ c1 ] } }
+    { base_table with current_requirement = Some { Group.cards = [ c1 ] } ; current_trick = [(1, { Group.cards = [ c1 ] })] }
   in
   let gs =
     make_game_state
@@ -79,7 +132,8 @@ let%expect_test "computer_chooses_completion_when_possible" =
   in
   print_computer_move gs computer;
   [%expect
-    {| ("Computer chooses this move" (move Pass)) |}]
+    {|
+      ("Computer chooses this move" (move Pass)) |}]
 ;;
 
 (* Test computer respects clear_on_two rule *)
@@ -250,8 +304,7 @@ let%expect_test "computer_completes_set_out_of_turn" =
   in
   let move = computer_player_move gs computer in
   print_s [%message "Computer out-of-turn completion move" (move : Play.t)];
-  [%expect
-    {| ("Computer out-of-turn completion move" (move Pass)) |}]
+  [%expect {| ("Computer out-of-turn completion move" (move Pass)) |}]
 ;;
 
 (* Test computer avoids illegal two groups when clear_on_two is enabled *)
@@ -272,7 +325,8 @@ let%expect_test "computer_avoids_illegal_two_groups" =
       ~decision:(Decision.In_progress { whose_turn = 0 })
   in
   print_computer_move gs computer;
-  [%expect {|
+  [%expect
+    {|
     ("Computer chooses this move"
      (move (Play ((cards (((rank Two) (suit Heart)))))))) |}]
 ;;
@@ -310,8 +364,7 @@ let%expect_test "computer_prioritizes_completion_over_card_value" =
       ~decision:(Decision.In_progress { whose_turn = 0 })
   in
   print_computer_move gs computer;
-  [%expect
-    {| ("Computer chooses this move" (move Pass)) |}]
+  [%expect {| ("Computer chooses this move" (move Pass)) |}]
 ;;
 
 (* Test computer handles game over state *)

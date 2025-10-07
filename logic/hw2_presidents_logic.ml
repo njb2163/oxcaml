@@ -229,17 +229,15 @@ module Game_State = struct
 
   let current_run_count (t : t) ~(rank : Card_Rank.t) : int =
     (* Count how many cards of a given rank are in the current trick *)
-    let rec loop acc = function
-      | [] -> acc (* End of list, return accumulated count *)
-      | (_pidx, g) :: rest ->
-        (match Group.rank g, rank with
-         | Some r1, r2 ->
-           if Card_Rank.equal r1 r2 then loop (acc + Group.count g) rest else acc
-         | None, _ -> acc)
-      (* Increment accumulator by 1 for each card in the trick that matches the rank being searched for.
-      Otherwise, break and return the accumulator *)
-    in
-    loop 0 t.table.current_trick
+    List.fold_until
+      t.table.current_trick
+      ~init:0
+      ~f:(fun acc (_, g) ->
+        match Group.rank g with
+        | Some r ->
+          if Card_Rank.equal r rank then Continue (acc + Group.count g) else Stop acc
+        | None -> Stop acc)
+      ~finish:Fn.id
   ;;
 
   let is_completion (t : t) (g : Group.t) : bool =

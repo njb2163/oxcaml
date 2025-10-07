@@ -29,11 +29,6 @@ let count_cards_by_rank (hand : Card.t list) : (Card_Rank.t * int) list =
     | None -> (card.rank, 1) :: acc)
 ;;
 
-(* Check if a group would complete a 4-of-a-kind set *)
-let would_complete_set (game_state : Game_State.t) (group : Group.t) : bool =
-  Game_State.is_completion game_state group
-;;
-
 (* Get all possible groups that can be played from a hand *)
 let get_all_possible_groups (hand : Card.t list) : Group.t list =
   let rank_counts = count_cards_by_rank hand in
@@ -73,7 +68,8 @@ let get_computer_move (game_state : Game_State.t) (player : Player.t) : Play.t o
     let possible_groups = get_all_possible_groups player.hand in
     (* Strategy: Try to complete sets first, then play low-value cards *)
     let completion_groups =
-      List.filter possible_groups ~f:(fun group -> would_complete_set game_state group)
+      List.filter possible_groups ~f:(fun group ->
+        Game_State.is_completion game_state group)
     in
     let valid_groups =
       match game_state.table.current_requirement with
