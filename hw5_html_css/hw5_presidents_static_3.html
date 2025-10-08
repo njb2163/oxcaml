@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html ng-app="myApp">
+
+<head>
+    <meta charset="utf-8">
+    <title>Presidents</title>
+    <meta name="description" content="Presidents game">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <link rel="stylesheet" type="text/css" href="hw5_static_state.css">
+    <link rel="icon" href="data:,">
+</head>
+
+<body>
+    <div class="game">
+        <! -- Opponent's hand -->
+            <div class="hand opponent">
+                <img class="card" src="resources/CLUB-1.svg" alt="Ace of CLUB">
+            </div>
+
+            <!-- Trick -->
+            <div class="trick">
+                <img class="card" src="resources/HEART-3.svg" alt="Three of HEART">
+                <img class="card" src="resources/SPADE-4.svg" alt="Four of SPADE">
+                <img class="card" src="resources/DIAMOND-10.svg" alt="Ten of DIAMOND">
+            </div>
+
+            <!-- Player's hand -->
+            <div class="hand player">
+                <div class="turn-indicator">
+                    <h2>Player's Turn</h2>
+                </div>
+                <img class="card" src="resources/CLUB-5.svg" alt="Five of CLUB">
+                <img class="card" src="resources/SPADE-6.svg" alt="Six of SPADE">
+            </div>
+
+    </div>
+</body>
+
+</html>
