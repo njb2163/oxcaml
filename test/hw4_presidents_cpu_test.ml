@@ -11,14 +11,10 @@ let make_player ~idx ~name ~hand =
   { Player.idx; name; hand; role = Role.Citizen; has_passed = false; total_points = 0 }
 ;;
 
-let base_rules : Rules.t = { clear_on_two = true; starting_card = None; max_players = 4 }
+let base_rules : Rules.t = { clear_on_two = true; starting_card = None }
 
 let base_table : Table_State.t =
-  { last_advancer = None
-  ; passes_in_row = 0
-  ; history = []
-  ; current_trick = []
-  }
+  { last_advancer = None; passes_in_row = 0; history = []; current_trick = [] }
 ;;
 
 let make_game_state ~players ~phase ~table ~decision =
@@ -66,10 +62,8 @@ let%expect_test "test_completion" =
   let c4 = make_card Card_Rank.Five Card_Suit.Club in
   let c5 = make_card Card_Rank.Three Card_Suit.Heart in
   let computer = make_player ~idx:0 ~name:"Computer" ~hand:[ c2; c3; c4; c5 ] in
-  let base_req =  { Group.cards = [ c1 ] } in
-  let table_with_requirement =
-    { base_table with current_trick = [(0, base_req)] }
-  in
+  let base_req = { Group.cards = [ c1 ] } in
+  let table_with_requirement = { base_table with current_trick = [ 0, base_req ] } in
   let gs =
     make_game_state
       ~players:[ computer ]
@@ -82,8 +76,9 @@ let%expect_test "test_completion" =
   print_s [%message (run_ct : int)];
   [%expect {| (run_ct 1) |}];
   let would_complete = Game_State.is_completion gs group in
-  print_s [%message (group : Group.t) "Would complete set" (would_complete: bool)];
-  [%expect {|
+  print_s [%message (group : Group.t) "Would complete set" (would_complete : bool)];
+  [%expect
+    {|
     ((group
       ((cards
         (((rank Five) (suit Spade)) ((rank Five) (suit Diamond))
@@ -109,7 +104,7 @@ let%expect_test "computer_chooses_last_card_in_hand_when_starting" =
     {|
       ("Computer chooses this move"
        (move (Play ((cards (((rank Five) (suit Heart)))))))) |}];
-  let computer = { (computer : Player.t) with hand = [ c2; c1 ; c3 ] } in
+  let computer = { (computer : Player.t) with hand = [ c2; c1; c3 ] } in
   let gs =
     make_game_state
       ~players:[ computer ]
@@ -121,8 +116,7 @@ let%expect_test "computer_chooses_last_card_in_hand_when_starting" =
   [%expect
     {|
       ("Computer chooses this move"
-       (move (Play ((cards (((rank Seven) (suit Diamond)))))))) |}];
-
+       (move (Play ((cards (((rank Seven) (suit Diamond)))))))) |}]
 ;;
 
 (* Test computer chooses completion over regular play *)
@@ -135,18 +129,19 @@ let%expect_test "computer_chooses_completion_when_possible" =
   let computer = make_player ~idx:0 ~name:"Computer" ~hand:[ c2; c3; c4 ] in
   let opp = make_player ~idx:1 ~name:"Opponent" ~hand:[ c5 ] in
   let table_with_requirement =
-    { base_table with current_trick = [(1, { Group.cards = [ c1 ] })] }
+    { base_table with current_trick = [ 1, { Group.cards = [ c1 ] } ] }
   in
   let gs =
     make_game_state
-      ~players:[ computer ; opp ]
+      ~players:[ computer; opp ]
       ~phase:Phase.Playing
       ~table:table_with_requirement
       ~decision:(Decision.In_progress { whose_turn = 0 })
   in
   let possible_groups = get_all_possible_groups computer.hand in
   print_s [%message (possible_groups : Group.t list)];
-  [%expect {|
+  [%expect
+    {|
     (possible_groups
      (((cards (((rank Five) (suit Spade)))))
       ((cards (((rank Five) (suit Spade)) ((rank Five) (suit Diamond)))))
@@ -155,18 +150,21 @@ let%expect_test "computer_chooses_completion_when_possible" =
          ((rank Five) (suit Club))))))) |}];
   let valid_groups = valid_groups gs (get_all_possible_groups computer.hand) in
   print_s [%message (valid_groups : Group.t list)];
-  [%expect {|
+  [%expect
+    {|
     (valid_groups (((cards (((rank Five) (suit Spade))))))) |}];
   let completion_groups = completion_groups gs possible_groups in
   print_s [%message (completion_groups : Group.t list)];
-  [%expect {|
+  [%expect
+    {|
     (completion_groups
      (((cards
         (((rank Five) (suit Spade)) ((rank Five) (suit Diamond))
          ((rank Five) (suit Club))))))) |}];
   let chosen_group = choose_group completion_groups valid_groups in
   print_s [%message (chosen_group : Group.t option)];
-  [%expect {|
+  [%expect
+    {|
     (chosen_group
      (((cards
         (((rank Five) (suit Spade)) ((rank Five) (suit Diamond))
