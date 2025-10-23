@@ -22,12 +22,26 @@ let presidents_board ~(game_state : Game_State.t) ~set_game_state =
          Vdom.Node.img
            ~attrs:[ Vdom.Attr.class_ "card" ; Vdom.Attr.src (Card.image_path card) ]
            ())) in
-  let render_hand ~(player : Player.t) =
+  
+  let render_hand ~(player : Player.t) ~(current_player_idx : Player_Idx.t option) =
+    let is_current_player = 
+      match current_player_idx with
+      | Some idx -> player.idx = idx
+      | None -> false
+    in
     Vdom.Node.div
       ~attrs:[ Vdom.Attr.class_ (Printf.sprintf "hand player_%d" (player.idx + 1)) ]
-      (List.map player.hand ~f:(fun card ->
-         Vdom.Node.img
-           ~attrs:[ Vdom.Attr.class_ "card" ; Vdom.Attr.src (Card.image_path card) ]
+      (if is_current_player then
+        (* Show actual cards for current player *)
+        List.map player.hand ~f:(fun card ->
+          Vdom.Node.img
+            ~attrs:[ Vdom.Attr.class_ "card" ; Vdom.Attr.src (Card.image_path card) ]
+            ())
+      else
+        (* Show card backs for other players *)
+        List.map player.hand ~f:(fun _ ->
+          Vdom.Node.img
+            ~attrs:[ Vdom.Attr.class_ "card" ; Vdom.Attr.src "resources/CARD-BACK.svg" ]
             ())) in
 
   Vdom.Node.div
@@ -44,9 +58,14 @@ let presidents_board ~(game_state : Game_State.t) ~set_game_state =
   | Phase.Playing ->
       (let trick_node =
         render_trick ~current_trick: (Table_State.cards_in_trick game_state.table) in
+      let current_player_idx =
+        match game_state.decision with
+        | In_progress { whose_turn } -> Some whose_turn
+        | _ -> None
+      in
       let player_nodes =
         List.map game_state.players ~f:(fun player ->
-          render_hand ~player)
+          render_hand ~player ~current_player_idx)
         in
         trick_node :: player_nodes
       )
