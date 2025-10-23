@@ -83,7 +83,7 @@ module Card = struct
     | Club -> "CLUB"
     | Spade -> "SPADE"
   in
-  Printf.sprintf "resources/%s-%s.svg" suit_str rank_str
+  Printf.sprintf "ui/resources/%s-%s.svg" suit_str rank_str
 end
 
 

@@ -36,7 +36,7 @@ let presidents_board ~(game_state : Game_State.t) ~set_game_state =
         (* Show actual cards for current player *)
         List.map player.hand ~f:(fun card ->
           Vdom.Node.img
-            ~attrs:[ Vdom.Attr.class_ "card" ; Vdom.Attr.src ("ui/" ^ Card.image_path card) ]
+            ~attrs:[ Vdom.Attr.class_ "card" ; Vdom.Attr.src (Card.image_path card) ]
             ())
       else
         (* Show card backs for other players *)
