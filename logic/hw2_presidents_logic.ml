@@ -60,32 +60,32 @@ module Card = struct
   ;;
 
   let image_path (card : t) : string =
-  let rank_str =
-    match card.rank with
-    | Three -> "3"
-    | Four -> "4"
-    | Five -> "5"
-    | Six -> "6"
-    | Seven -> "7"
-    | Eight -> "8"
-    | Nine -> "9"
-    | Ten -> "10"
-    | Jack -> "11"
-    | Queen -> "12"
-    | King -> "13"
-    | Ace -> "1"
-    | Two -> "2"
-  in
-  let suit_str =
-    match card.suit with
-    | Heart -> "HEART"
-    | Diamond -> "DIAMOND"
-    | Club -> "CLUB"
-    | Spade -> "SPADE"
-  in
-  Printf.sprintf "ui/resources/%s-%s.svg" suit_str rank_str
+    let rank_str =
+      match card.rank with
+      | Three -> "3"
+      | Four -> "4"
+      | Five -> "5"
+      | Six -> "6"
+      | Seven -> "7"
+      | Eight -> "8"
+      | Nine -> "9"
+      | Ten -> "10"
+      | Jack -> "11"
+      | Queen -> "12"
+      | King -> "13"
+      | Ace -> "1"
+      | Two -> "2"
+    in
+    let suit_str =
+      match card.suit with
+      | Heart -> "HEART"
+      | Diamond -> "DIAMOND"
+      | Club -> "CLUB"
+      | Spade -> "SPADE"
+    in
+    Printf.sprintf "ui/resources/%s-%s.svg" suit_str rank_str
+  ;;
 end
-
 
 module Player = struct
   type t =
@@ -100,13 +100,14 @@ module Player = struct
 
   let create_player_list (num_players : int) : t list =
     List.init num_players ~f:(fun i ->
-        { idx = i
-        ; name = Printf.sprintf "Player %d" (i + 1)
-        ; hand = []
-        ; role = Role.Citizen
-        ; has_passed = false
-        ; total_points = 0
-        })
+      { idx = i
+      ; name = Printf.sprintf "Player %d" (i + 1)
+      ; hand = []
+      ; role = Role.Citizen
+      ; has_passed = false
+      ; total_points = 0
+      })
+  ;;
 
   let player_has_cards (p : t) = not (List.is_empty p.hand)
 
@@ -121,9 +122,7 @@ module Player = struct
     List.map players ~f:(fun p -> if p.idx = id then { p with hand = new_hand } else p)
   ;;
 
-  let sort_hand (hand : Card.t list) : Card.t list =
-    List.sort hand ~compare:Card.compare
-  ;;
+  let sort_hand (hand : Card.t list) : Card.t list = List.sort hand ~compare:Card.compare
 end
 
 module Move_error = struct
@@ -227,7 +226,7 @@ module Decision = struct
 
   let is_game_over t =
     match t with
-     | Game_Over _ -> true
+    | Game_Over _ -> true
     | In_progress _ | Round_Over _ -> false
   ;;
 end
@@ -244,15 +243,17 @@ module Table_State = struct
 
   let init_table_state () : t =
     { last_advancer = None; passes_in_row = 0; history = []; current_trick = [] }
+  ;;
 
-  let current_requirement (table: t) : Group.t option =
-    match table.current_trick with 
+  let current_requirement (table : t) : Group.t option =
+    match table.current_trick with
     | [] -> None
     | (_, g) :: _ -> Some g
-  
-  let cards_in_trick (table: t) : Card.t list =
-    List.concat_map table.current_trick ~f:(fun (_, g) -> g.cards)
+  ;;
 
+  let cards_in_trick (table : t) : Card.t list =
+    List.concat_map table.current_trick ~f:(fun (_, g) -> g.cards)
+  ;;
 end
 
 module Game_State = struct
@@ -269,9 +270,7 @@ module Game_State = struct
   [@@deriving sexp, compare, equal]
 
   module Create_error = struct
-    type t =
-      | Invalid_number_of_players
-    [@@deriving sexp, compare]
+    type t = Invalid_number_of_players [@@deriving sexp, compare]
   end
 
   let create_deck () : Card.t list =
@@ -292,8 +291,10 @@ module Game_State = struct
       ]
     in
     let suits : Card_Suit.t list = [ Heart; Diamond; Club; Spade ] in
-    let deck = List.concat_map ranks ~f:(fun r ->
-        List.map suits ~f:(fun s -> { Card.rank = r; suit = s })) in
+    let deck =
+      List.concat_map ranks ~f:(fun r ->
+        List.map suits ~f:(fun s -> { Card.rank = r; suit = s }))
+    in
     deck
   ;;
 
@@ -304,7 +305,7 @@ module Game_State = struct
       let player_list = Player.create_player_list players in
       Ok
         { players = player_list
-        ; rules = rules
+        ; rules
         ; deck = create_deck ()
         ; discard_pile = []
         ; table = Table_State.init_table_state ()
@@ -312,41 +313,42 @@ module Game_State = struct
         ; decision = In_progress { whose_turn = 0 }
         ; finished_order = []
         }
-    | false ->
-      Error
-        [ Create_error.Invalid_number_of_players ]
-        
+    | false -> Error [ Create_error.Invalid_number_of_players ]
   ;;
 
-  let shuffle_deck (deck : Card.t list) : Card.t list =
-    List.permute deck 
-  ;;
+  let shuffle_deck (deck : Card.t list) : Card.t list = List.permute deck
 
   let deal_cards (gs : t) : t =
     let shuffled = shuffle_deck gs.deck in
     let num_players = List.length gs.players in
     let dealt_hands =
-      List.foldi shuffled ~init:(List.init num_players ~f:(fun _ -> []))
-      ~f:(fun i acc card ->
-        let player_idx = i mod num_players in
-        List.mapi acc ~f:(fun j hand ->
-          if j = player_idx then card :: hand else hand)) in
+      List.foldi
+        shuffled
+        ~init:(List.init num_players ~f:(fun _ -> []))
+        ~f:(fun i acc card ->
+          let player_idx = i mod num_players in
+          List.mapi acc ~f:(fun j hand -> if j = player_idx then card :: hand else hand))
+    in
     let sorted_hands = List.map dealt_hands ~f:Player.sort_hand in
-    let updated_players = List.mapi gs.players ~f:( fun i p -> { p with hand = List.nth_exn sorted_hands i } ) in
-    let whose_turn = 
+    let updated_players =
+      List.mapi gs.players ~f:(fun i p -> { p with hand = List.nth_exn sorted_hands i })
+    in
+    let whose_turn =
       match gs.rules.starting_card with
       | None -> 0
       | Some sc ->
-        (match List.find updated_players ~f:(fun p -> List.mem p.hand sc ~equal:Card.equal) with
-        | Some p -> p.idx
-        | None -> 0) in
+        (match
+           List.find updated_players ~f:(fun p -> List.mem p.hand sc ~equal:Card.equal)
+         with
+         | Some p -> p.idx
+         | None -> 0)
+    in
     { gs with
       players = updated_players
     ; phase = Playing
     ; decision = In_progress { whose_turn }
     }
-      
-        ;;
+  ;;
 
   let start_new_trick_from (gs : t) ~(starter : Player_Idx.t) : t =
     { gs with
@@ -578,7 +580,7 @@ module Game_State = struct
 
                       (* Update the table state *)
                       let table' =
-                        {Table_State.last_advancer = Some player.idx
+                        { Table_State.last_advancer = Some player.idx
                         ; passes_in_row = 0
                         ; history
                         ; current_trick = current_trick'
