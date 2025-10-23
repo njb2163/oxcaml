@@ -70,10 +70,10 @@ module Card = struct
     | Eight -> "8"
     | Nine -> "9"
     | Ten -> "10"
-    | Jack -> "J"
-    | Queen -> "Q"
-    | King -> "K"
-    | Ace -> "A"
+    | Jack -> "11"
+    | Queen -> "12"
+    | King -> "13"
+    | Ace -> "1"
     | Two -> "2"
   in
   let suit_str =
