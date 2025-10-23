@@ -149,3 +149,35 @@ input {
 }
 
 
+.deal-button {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  
+  /* Make it large */
+  font-size: 2em;
+  padding: min(3vw, 3vh) min(6vw, 6vh);
+  
+  /* Styling */
+  background-color: #4CAF50;
+  color: white;
+  border: min(0.5vw, 0.5vh) solid #45a049;
+  border-radius: min(1vw, 1vh);
+  cursor: pointer;
+  font-weight: bold;
+  box-shadow: 0 min(0.5vw, 0.5vh) min(1vw, 1vh) rgba(0, 0, 0, 0.3);
+  transition: all 0.3s ease;
+}
+
+.deal-button:hover {
+  background-color: #45a049;
+  box-shadow: 0 min(0.8vw, 0.8vh) min(1.5vw, 1.5vh) rgba(0, 0, 0, 0.4);
+  transform: translate(-50%, -50%) scale(1.05);
+}
+
+.deal-button:active {
+  transform: translate(-50%, -50%) scale(0.98);
+  box-shadow: 0 min(0.2vw, 0.2vh) min(0.5vw, 0.5vh) rgba(0, 0, 0, 0.2);
+}
+
