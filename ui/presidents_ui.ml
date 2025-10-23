@@ -9,6 +9,7 @@ let presidents_board ~(game_state : Game_State.t) ~set_game_state =
   let render_deal_button ~(game_state : Game_State.t) ~set_game_state =
     Vdom.Node.button
       ~attrs:[
+        Vdom.Attr.class_ "deal-button" ;
         Vdom.Attr.on_click (fun _ ->
           let new_state = Game_State.deal_cards game_state in
           set_game_state new_state)
@@ -35,13 +36,13 @@ let presidents_board ~(game_state : Game_State.t) ~set_game_state =
         (* Show actual cards for current player *)
         List.map player.hand ~f:(fun card ->
           Vdom.Node.img
-            ~attrs:[ Vdom.Attr.class_ "card" ; Vdom.Attr.src (Card.image_path card) ]
+            ~attrs:[ Vdom.Attr.class_ "card" ; Vdom.Attr.src ("ui/" ^ Card.image_path card) ]
             ())
       else
         (* Show card backs for other players *)
         List.map player.hand ~f:(fun _ ->
           Vdom.Node.img
-            ~attrs:[ Vdom.Attr.class_ "card" ; Vdom.Attr.src "resources/CARD-BACK.svg" ]
+            ~attrs:[ Vdom.Attr.class_ "card" ; Vdom.Attr.src "ui/resources/CARD-BACK.svg" ]
             ())) in
 
   Vdom.Node.div
@@ -78,7 +79,7 @@ let presidents_board ~(game_state : Game_State.t) ~set_game_state =
 
 let app =
   let initial_state =
-    Game_State.create ~players:2 ~rules:{ Rules.clear_on_two = true; starting_card = None }
+    Game_State.create ~players:4 ~rules:{ Rules.clear_on_two = true; starting_card = None }
     |> Result.ok
     |> Option.value_exn
   in
