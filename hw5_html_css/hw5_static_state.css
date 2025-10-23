@@ -99,7 +99,7 @@ input {
 .card {
   width: calc(min(100vw, 100vh)/ 7);
   height: calc(min(100vw, 100vh)/ 7);
-  margin-right: -3%;
+  margin-right: -10%;
 }
 
 .player_4 {
@@ -124,7 +124,7 @@ input {
 
 .player_2 .card, .player_4 .card {
   margin-right: 0;
-  margin-bottom: -20%;
+  margin-bottom: -80%;
   transform: rotate(90deg);
 }
 
