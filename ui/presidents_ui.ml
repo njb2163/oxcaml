@@ -4,9 +4,7 @@ open Hw2_presidents_logic
 open Virtual_dom
 open! Bonsai.Let_syntax
 
-let presidents_board ~(game_state : Game_State.t) ~set_game_state =
-  let is_game_over = Decision.is_game_over game_state.decision in
-    
+let presidents_board ~(game_state : Game_State.t) ~set_game_state =    
 
   let render_deal_button ~(game_state : Game_State.t) ~set_game_state =
     Vdom.Node.button
