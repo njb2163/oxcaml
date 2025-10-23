@@ -179,12 +179,8 @@ module Table_State : sig
     ; passes_in_row : int
     ; history : (Player_Idx.t * Play.t) list
     ; current_trick : (Player_Idx.t * Group.t) list
-    }
+    } [@@deriving sexp, compare, equal]
 
-  val t_of_sexp : Sexplib0.Sexp.t -> t
-  val sexp_of_t : t -> Sexplib0.Sexp.t
-  val compare : t -> t -> int
-  val equal : t -> t -> bool
   val current_requirement : t -> Group.t option
 end
 

@@ -20,11 +20,7 @@ let make_player ~idx ~name ~hand =
 let base_rules : Rules.t = { clear_on_two = true; starting_card = None; max_players = 4 }
 
 let base_table : Table_State.t =
-  {last_advancer = None
-  ; passes_in_row = 0
-  ; history = []
-  ; current_trick = []
-  }
+  { last_advancer = None; passes_in_row = 0; history = []; current_trick = [] }
 ;;
 
 let make_game_state ~players ~phase ~table ~decision =
@@ -63,13 +59,10 @@ let%expect_test "remove_card_twice" =
   let card2 = { Card.suit = Card_Suit.Spade; Card.rank = Card_Rank.Ace } in
   let card3 = { Card.suit = Card_Suit.Diamond; Card.rank = Card_Rank.Ten } in
   let hand : Card.t list = [ card1; card2; card3 ] in
-  let result1 = Card.remove_cards_exact [ card1 ] hand in
-  match result1 with
-  | None -> print_s [%message "None"]
-  | Some r ->
-    let result2 = Card.remove_cards_exact [ card1 ] r in
-    print_hand result2;
-    [%expect {| None |}]
+  let r = Card.remove_cards_exact [ card1 ] hand |> Option.value_exn in
+  let result2 = Card.remove_cards_exact [ card1 ] r in
+  print_hand result2;
+  [%expect {| None |}]
 ;;
 
 (* Test removing a card that was already removed *)
