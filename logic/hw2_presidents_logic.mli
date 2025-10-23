@@ -58,14 +58,11 @@ module Card : sig
   type t =
     { rank : Card_Rank.t
     ; suit : Card_Suit.t
-    }
+    } [@@deriving sexp, compare, equal]
 
-  val t_of_sexp : Sexplib0.Sexp.t -> t
-  val sexp_of_t : t -> Sexplib0.Sexp.t
-  val compare : t -> t -> int
-  val equal : t -> t -> bool
   val is_subset : t list -> t list -> bool
   val remove_cards_exact : t list -> t list -> t list option
+  val image_path : t -> string
 end
 
 module Player : sig
@@ -110,7 +107,6 @@ module Rules : sig
   type t =
     { clear_on_two : bool
     ; starting_card : Card.t option
-    ; max_players : int
     }
 
   val t_of_sexp : Sexplib0.Sexp.t -> t
@@ -166,11 +162,9 @@ module Decision : sig
     | In_progress of { whose_turn : Player_Idx.t }
     | Round_Over of { round_ranking : Player_Idx.t list }
     | Game_Over of { final_ranking : (Player_Idx.t * Role.t) list }
+    [@@deriving sexp, compare, equal]
 
-  val t_of_sexp : Sexplib0.Sexp.t -> t
-  val sexp_of_t : t -> Sexplib0.Sexp.t
-  val compare : t -> t -> int
-  val equal : t -> t -> bool
+  val is_game_over : t -> bool
 end
 
 module Table_State : sig
@@ -182,6 +176,7 @@ module Table_State : sig
     } [@@deriving sexp, compare, equal]
 
   val current_requirement : t -> Group.t option
+  val cards_in_trick : t -> Card.t list
 end
 
 module Game_State : sig
@@ -194,17 +189,19 @@ module Game_State : sig
     ; phase : Phase.t
     ; decision : Decision.t
     ; finished_order : Player_Idx.t list
-    }
+    } [@@deriving sexp, compare, equal]
 
-  val t_of_sexp : Sexplib0.Sexp.t -> t
-  val sexp_of_t : t -> Sexplib0.Sexp.t
-  val compare : t -> t -> int
-  val equal : t -> t -> bool
+    module Create_error : sig
+      type t =
+        | Invalid_number_of_players 
+    end
+
+  val create : players:int -> rules:Rules.t -> (t, Create_error.t list) Result.t
   val start_new_trick_from : t -> starter:Player_Idx.t -> t
   val current_run_count : t -> rank:Card_Rank.t -> int
   val is_completion : t -> Group.t -> bool
   val player_idx_is_finished : t -> Player_Idx.t -> bool
   val active_player_idxs : t -> Player_Idx.t list
   val next_active_after : t -> Player_Idx.t -> Player_Idx.t option
-  val make_move : t -> Player.t -> Play.t -> (t, Move_error.t) Core.Result.t
+  val make_move : t -> Player.t -> Play.t -> (t, Move_error.t) Result.t
 end

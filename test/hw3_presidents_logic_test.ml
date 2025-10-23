@@ -17,7 +17,7 @@ let make_player ~idx ~name ~hand =
   { Player.idx; name; hand; role = Role.Citizen; has_passed = false; total_points = 0 }
 ;;
 
-let base_rules : Rules.t = { clear_on_two = true; starting_card = None; max_players = 4 }
+let base_rules : Rules.t = { clear_on_two = true; starting_card = None }
 
 let base_table : Table_State.t =
   { last_advancer = None; passes_in_row = 0; history = []; current_trick = [] }
@@ -165,7 +165,7 @@ let%expect_test "make_move: successful simple play (reduces hand)" =
    ((players
      (((idx 0) (name P0) (hand ()) (role Citizen) (has_passed false)
        (total_points 0))))
-    (rules ((clear_on_two true) (starting_card ()) (max_players 4))) (deck ())
+    (rules ((clear_on_two true) (starting_card ()))) (deck ())
     (discard_pile ())
     (table
      ((last_advancer (0)) (passes_in_row 0)
@@ -241,7 +241,7 @@ let%expect_test "Move that does not meet requirement" =
            (has_passed false) (total_points 0))
           ((idx 1) (name P1) (hand (((rank Three) (suit Diamond)))) (role Citizen)
            (has_passed false) (total_points 0))))
-        (rules ((clear_on_two true) (starting_card ()) (max_players 4))) (deck ())
+        (rules ((clear_on_two true) (starting_card ()))) (deck ())
         (discard_pile ())
         (table
          ((last_advancer (0)) (passes_in_row 0)
@@ -284,7 +284,7 @@ let%expect_test "Sequence of two moves that does not end round" =
           ((idx 1) (name P1)
            (hand (((rank Eight) (suit Diamond)) ((rank Three) (suit Diamond))))
            (role Citizen) (has_passed false) (total_points 0))))
-        (rules ((clear_on_two true) (starting_card ()) (max_players 4))) (deck ())
+        (rules ((clear_on_two true) (starting_card ()))) (deck ())
         (discard_pile ())
         (table
          ((last_advancer (0)) (passes_in_row 0)
@@ -302,7 +302,7 @@ let%expect_test "Sequence of two moves that does not end round" =
            (has_passed false) (total_points 0))
           ((idx 1) (name P1) (hand (((rank Three) (suit Diamond)))) (role Citizen)
            (has_passed false) (total_points 0))))
-        (rules ((clear_on_two true) (starting_card ()) (max_players 4))) (deck ())
+        (rules ((clear_on_two true) (starting_card ()))) (deck ())
         (discard_pile ())
         (table
          ((last_advancer (1)) (passes_in_row 0)
@@ -342,7 +342,7 @@ let%expect_test "Sequence of two moves that ends round" =
            (has_passed false) (total_points 0))
           ((idx 1) (name P1) (hand (((rank Eight) (suit Diamond)))) (role Citizen)
            (has_passed false) (total_points 0))))
-        (rules ((clear_on_two true) (starting_card ()) (max_players 4))) (deck ())
+        (rules ((clear_on_two true) (starting_card ()))) (deck ())
         (discard_pile ())
         (table
          ((last_advancer (0)) (passes_in_row 0)
@@ -360,7 +360,7 @@ let%expect_test "Sequence of two moves that ends round" =
            (has_passed false) (total_points 0))
           ((idx 1) (name P1) (hand ()) (role Citizen) (has_passed false)
            (total_points 0))))
-        (rules ((clear_on_two true) (starting_card ()) (max_players 4))) (deck ())
+        (rules ((clear_on_two true) (starting_card ()))) (deck ())
         (discard_pile ())
         (table
          ((last_advancer ()) (passes_in_row 0)
@@ -404,7 +404,7 @@ let%expect_test "Sequence of two moves that finishes for one player, round conti
            (has_passed false) (total_points 0))
           ((idx 2) (name P2) (hand (((rank Four) (suit Club)))) (role Citizen)
            (has_passed false) (total_points 0))))
-        (rules ((clear_on_two true) (starting_card ()) (max_players 4))) (deck ())
+        (rules ((clear_on_two true) (starting_card ()))) (deck ())
         (discard_pile ())
         (table
          ((last_advancer (0)) (passes_in_row 0)
@@ -424,7 +424,7 @@ let%expect_test "Sequence of two moves that finishes for one player, round conti
            (total_points 0))
           ((idx 2) (name P2) (hand (((rank Four) (suit Club)))) (role Citizen)
            (has_passed false) (total_points 0))))
-        (rules ((clear_on_two true) (starting_card ()) (max_players 4))) (deck ())
+        (rules ((clear_on_two true) (starting_card ()))) (deck ())
         (discard_pile ())
         (table
          ((last_advancer (1)) (passes_in_row 0)
@@ -468,7 +468,7 @@ let%expect_test "Test valid passing" =
            (has_passed false) (total_points 0))
           ((idx 2) (name P2) (hand (((rank Four) (suit Club)))) (role Citizen)
            (has_passed false) (total_points 0))))
-        (rules ((clear_on_two true) (starting_card ()) (max_players 4))) (deck ())
+        (rules ((clear_on_two true) (starting_card ()))) (deck ())
         (discard_pile ())
         (table
          ((last_advancer (0)) (passes_in_row 0)
@@ -488,7 +488,7 @@ let%expect_test "Test valid passing" =
            (has_passed false) (total_points 0))
           ((idx 2) (name P2) (hand (((rank Four) (suit Club)))) (role Citizen)
            (has_passed false) (total_points 0))))
-        (rules ((clear_on_two true) (starting_card ()) (max_players 4))) (deck ())
+        (rules ((clear_on_two true) (starting_card ()))) (deck ())
         (discard_pile ())
         (table
          ((last_advancer (0)) (passes_in_row 1)
@@ -528,7 +528,7 @@ let%expect_test "Test valid passing back to last advancer" =
            (has_passed false) (total_points 0))
           ((idx 2) (name P2) (hand (((rank Four) (suit Club)))) (role Citizen)
            (has_passed false) (total_points 0))))
-        (rules ((clear_on_two true) (starting_card ()) (max_players 4))) (deck ())
+        (rules ((clear_on_two true) (starting_card ()))) (deck ())
         (discard_pile ())
         (table
          ((last_advancer (0)) (passes_in_row 0)
@@ -548,7 +548,7 @@ let%expect_test "Test valid passing back to last advancer" =
            (has_passed false) (total_points 0))
           ((idx 2) (name P2) (hand (((rank Four) (suit Club)))) (role Citizen)
            (has_passed false) (total_points 0))))
-        (rules ((clear_on_two true) (starting_card ()) (max_players 4))) (deck ())
+        (rules ((clear_on_two true) (starting_card ()))) (deck ())
         (discard_pile ())
         (table
          ((last_advancer (0)) (passes_in_row 1)
@@ -570,7 +570,7 @@ let%expect_test "Test valid passing back to last advancer" =
            (has_passed false) (total_points 0))
           ((idx 2) (name P2) (hand (((rank Four) (suit Club)))) (role Citizen)
            (has_passed false) (total_points 0))))
-        (rules ((clear_on_two true) (starting_card ()) (max_players 4))) (deck ())
+        (rules ((clear_on_two true) (starting_card ()))) (deck ())
         (discard_pile (((rank Five) (suit Heart))))
         (table
          ((last_advancer ()) (passes_in_row 0)
@@ -609,7 +609,7 @@ let%expect_test "Test clear on two" =
           ((idx 1) (name P1)
            (hand (((rank Two) (suit Diamond)) ((rank Four) (suit Club))))
            (role Citizen) (has_passed false) (total_points 0))))
-        (rules ((clear_on_two true) (starting_card ()) (max_players 4))) (deck ())
+        (rules ((clear_on_two true) (starting_card ()))) (deck ())
         (discard_pile ())
         (table
          ((last_advancer (0)) (passes_in_row 0)
@@ -627,7 +627,7 @@ let%expect_test "Test clear on two" =
            (has_passed false) (total_points 0))
           ((idx 1) (name P1) (hand (((rank Four) (suit Club)))) (role Citizen)
            (has_passed false) (total_points 0))))
-        (rules ((clear_on_two true) (starting_card ()) (max_players 4))) (deck ())
+        (rules ((clear_on_two true) (starting_card ()))) (deck ())
         (discard_pile (((rank Two) (suit Diamond)) ((rank Five) (suit Heart))))
         (table
          ((last_advancer ()) (passes_in_row 0)

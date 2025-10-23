@@ -94,12 +94,22 @@ input {
   margin-right: -3%;
 }
 
-.opponent {
+.player_4 {
+  position: absolute;
+  right: 5%;
+}
+
+.player_3 {
   position: absolute;
   top: 5%;
 }
 
-.player {
+.player_2 {
+  position: absolute;
+  left: 5%;
+}
+
+.player_1 {
   position: absolute;
   bottom: 5%;
 }

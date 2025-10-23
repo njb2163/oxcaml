@@ -11,7 +11,7 @@ let make_player ~idx ~name ~hand =
   { Player.idx; name; hand; role = Role.Citizen; has_passed = false; total_points = 0 }
 ;;
 
-let base_rules : Rules.t = { clear_on_two = true; starting_card = None; max_players = 4 }
+let base_rules : Rules.t = { clear_on_two = true; starting_card = None }
 
 let base_table : Table_State.t =
   { last_advancer = None; passes_in_row = 0; history = []; current_trick = [] }
