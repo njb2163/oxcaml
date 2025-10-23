@@ -83,7 +83,7 @@ module Card = struct
     | Club -> "CLUB"
     | Spade -> "SPADE"
   in
-  Printf.sprintf "resources/%s-%s.png" suit_str rank_str
+  Printf.sprintf "resources/%s-%s.svg" suit_str rank_str
 end
 
 
@@ -119,6 +119,10 @@ module Player = struct
     =
     (* Update a player's hand in the list of players. Return all other player's hands as they were. *)
     List.map players ~f:(fun p -> if p.idx = id then { p with hand = new_hand } else p)
+  ;;
+
+  let sort_hand (hand : Card.t list) : Card.t list =
+    List.sort hand ~compare:Card.compare
   ;;
 end
 
@@ -294,7 +298,7 @@ module Game_State = struct
   ;;
 
   let create ~players ~rules : (t, Create_error.t list) Result.t =
-    let size_ok = players < 5 && players > 0 in
+    let size_ok = players < 5 && players > 1 in
     match size_ok with
     | true ->
       let player_list = Player.create_player_list players in
@@ -313,6 +317,36 @@ module Game_State = struct
         [ Create_error.Invalid_number_of_players ]
         
   ;;
+
+  let shuffle_deck (deck : Card.t list) : Card.t list =
+    List.permute deck 
+  ;;
+
+  let deal_cards (gs : t) : t =
+    let shuffled = shuffle_deck gs.deck in
+    let num_players = List.length gs.players in
+    let dealt_hands =
+      List.foldi shuffled ~init:(List.init num_players ~f:(fun _ -> []))
+      ~f:(fun i acc card ->
+        let player_idx = i mod num_players in
+        List.mapi acc ~f:(fun j hand ->
+          if j = player_idx then card :: hand else hand)) in
+    let sorted_hands = List.map dealt_hands ~f:Player.sort_hand in
+    let updated_players = List.mapi gs.players ~f:( fun i p -> { p with hand = List.nth_exn sorted_hands i } ) in
+    let whose_turn = 
+      match gs.rules.starting_card with
+      | None -> 0
+      | Some sc ->
+        (match List.find updated_players ~f:(fun p -> List.mem p.hand sc ~equal:Card.equal) with
+        | Some p -> p.idx
+        | None -> 0) in
+    { gs with
+      players = updated_players
+    ; phase = Playing
+    ; decision = In_progress { whose_turn }
+    }
+      
+        ;;
 
   let start_new_trick_from (gs : t) ~(starter : Player_Idx.t) : t =
     { gs with

@@ -6,6 +6,17 @@ open! Bonsai.Let_syntax
 
 let presidents_board ~(game_state : Game_State.t) ~set_game_state =
   let is_game_over = Decision.is_game_over game_state.decision in
+    
+
+  let render_deal_button ~(game_state : Game_State.t) ~set_game_state =
+    Vdom.Node.button
+      ~attrs:[
+        Vdom.Attr.on_click (fun _ ->
+          let new_state = Game_State.deal_cards game_state in
+          set_game_state new_state)
+      ]
+      [ Vdom.Node.text "Deal Cards" ] in
+
   let render_trick ~current_trick =
     Vdom.Node.div
       ~attrs:[ Vdom.Attr.class_ "trick" ]
@@ -20,15 +31,31 @@ let presidents_board ~(game_state : Game_State.t) ~set_game_state =
          Vdom.Node.img
            ~attrs:[ Vdom.Attr.class_ "card" ; Vdom.Attr.src (Card.image_path card) ]
             ())) in
+
   Vdom.Node.div
     ~attrs:[ Vdom.Attr.class_ "game" ]
-    (let trick_node =
-       render_trick ~current_trick: (Table_State.cards_in_trick game_state.table) in
-     let player_nodes =
-       List.map game_state.players ~f:(fun player ->
-         render_hand ~player)
-       in
-      trick_node :: player_nodes
+    (
+            
+  match game_state.phase with 
+  | Phase.Dealing ->
+      [render_deal_button ~game_state ~set_game_state]
+  | Phase.DeckPicking ->
+      [Vdom.Node.div
+        ~attrs:[ Vdom.Attr.class_ "deck-picking" ]
+        [ Vdom.Node.text "Deck Picking Phase - Not Implemented Yet" ]]
+  | Phase.Playing ->
+      (let trick_node =
+        render_trick ~current_trick: (Table_State.cards_in_trick game_state.table) in
+      let player_nodes =
+        List.map game_state.players ~f:(fun player ->
+          render_hand ~player)
+        in
+        trick_node :: player_nodes
+      )
+  | Phase.RoundEnd ->
+      [Vdom.Node.div
+        ~attrs:[ Vdom.Attr.class_ "round-over" ]
+        [ Vdom.Node.text "Round Over!" ]]
     )
       ;;
 

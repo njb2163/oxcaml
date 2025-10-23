@@ -73,15 +73,12 @@ module Player : sig
     ; role : Role.t
     ; has_passed : bool
     ; total_points : int
-    }
+    } [@@deriving sexp, compare, equal]
 
-  val t_of_sexp : Sexplib0.Sexp.t -> t
-  val sexp_of_t : t -> Sexplib0.Sexp.t
-  val compare : t -> t -> int
-  val equal : t -> t -> bool
   val player_has_cards : t -> bool
   val lookup_player_exn : t list -> Player_Idx.t -> t
   val update_player_hand : t list -> id:Player_Idx.t -> new_hand:Card.t list -> t list
+  val sort_hand : Card.t list -> Card.t list
 end
 
 module Move_error : sig
@@ -197,6 +194,8 @@ module Game_State : sig
     end
 
   val create : players:int -> rules:Rules.t -> (t, Create_error.t list) Result.t
+  val shuffle_deck : Card.t list -> Card.t list
+  val deal_cards : t -> t
   val start_new_trick_from : t -> starter:Player_Idx.t -> t
   val current_run_count : t -> rank:Card_Rank.t -> int
   val is_completion : t -> Group.t -> bool
