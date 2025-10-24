@@ -393,4 +393,7 @@ input {
   margin-bottom: -10%;
   transform: rotate(90deg);
 }
+.trick .card {
+  margin-right: -4%;
+}
 }
