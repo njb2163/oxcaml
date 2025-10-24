@@ -160,6 +160,7 @@ let presidents_board
 ;;
 
 let app =
+  (* Set initial state *)
   let initial_state =
     Game_State.create
       ~players:4
