@@ -571,6 +571,7 @@ module Game_State = struct
                           players = players'
                         ; table = table'
                         ; finished_order = finished_order'
+                        ; phase = RoundEnd
                         ; decision = Round_Over { round_ranking = final_ranking }
                         }
                     | _ ->

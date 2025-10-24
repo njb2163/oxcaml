@@ -103,8 +103,7 @@ let presidents_board
                  ~attrs:
                    [ Vdom.Attr.class_ "card"; Vdom.Attr.src "ui/resources/CARD-BACK.svg" ]
                  ()
-             ; Vdom.Node.div
-             (* Put card count so cards dont crowd the screen *)
+             ; Vdom.Node.div (* Put card count so cards dont crowd the screen *)
                  ~attrs:[ Vdom.Attr.class_ "card-count" ]
                  [ Vdom.Node.text (Printf.sprintf "×%d" hand_size) ]
              ]
@@ -134,12 +133,31 @@ let presidents_board
        in
        let action_button = render_action_button ~selected_cards ~current_player_idx in
        let error_display = render_error_message ~error_message in
-        [ trick_node; action_button; error_display ] @ player_nodes
+       [ trick_node; action_button; error_display ] @ player_nodes
      | Phase.RoundEnd ->
-       [ Vdom.Node.div
-           ~attrs:[ Vdom.Attr.class_ "round-over" ]
-           [ Vdom.Node.text "Round Over!" ]
-       ])
+       (match game_state.decision with
+        | Round_Over { round_ranking } ->
+          let ranking_text =
+            List.mapi round_ranking ~f:(fun i player_idx ->
+              let player = Player.lookup_player_exn game_state.players player_idx in
+              Printf.sprintf "%d. %s" (i + 1) player.name)
+            |> String.concat ~sep:", "
+          in
+          [ Vdom.Node.div
+              ~attrs:[ Vdom.Attr.class_ "round-over" ]
+              [ Vdom.Node.div
+                  ~attrs:[ Vdom.Attr.class_ "round-over-title" ]
+                  [ Vdom.Node.text "Round Over!" ]
+              ; Vdom.Node.div
+                  ~attrs:[ Vdom.Attr.class_ "round-ranking" ]
+                  [ Vdom.Node.text ("Final Ranking: " ^ ranking_text) ]
+              ]
+          ]
+        | _ ->
+          [ Vdom.Node.div
+              ~attrs:[ Vdom.Attr.class_ "round-over" ]
+              [ Vdom.Node.text "Round Over!" ]
+          ]))
 ;;
 
 let app =
