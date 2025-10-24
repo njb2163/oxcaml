@@ -134,7 +134,7 @@ let presidents_board
        in
        let action_button = render_action_button ~selected_cards ~current_player_idx in
        let error_display = render_error_message ~error_message in
-       player_nodes @ [ trick_node; action_button; error_display ]
+        [ trick_node; action_button; error_display ] @ player_nodes
      | Phase.RoundEnd ->
        [ Vdom.Node.div
            ~attrs:[ Vdom.Attr.class_ "round-over" ]
