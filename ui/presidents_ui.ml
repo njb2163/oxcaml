@@ -137,21 +137,20 @@ let presidents_board
      | Phase.RoundEnd ->
        (match game_state.decision with
         | Round_Over { round_ranking } ->
-          let ranking_text =
+          let ranking_nodes =
             List.mapi round_ranking ~f:(fun i player_idx ->
               let player = Player.lookup_player_exn game_state.players player_idx in
-              Printf.sprintf "%d. %s" (i + 1) player.name)
-            |> String.concat ~sep:", "
+              Vdom.Node.div
+                ~attrs:[ Vdom.Attr.class_ "ranking-entry" ]
+                [ Vdom.Node.text (Printf.sprintf "%d. %s" (i + 1) player.name) ])
           in
           [ Vdom.Node.div
               ~attrs:[ Vdom.Attr.class_ "round-over" ]
-              [ Vdom.Node.div
-                  ~attrs:[ Vdom.Attr.class_ "round-over-title" ]
-                  [ Vdom.Node.text "Round Over!" ]
-              ; Vdom.Node.div
-                  ~attrs:[ Vdom.Attr.class_ "round-ranking" ]
-                  [ Vdom.Node.text ("Final Ranking: " ^ ranking_text) ]
-              ]
+              ([ Vdom.Node.div
+                   ~attrs:[ Vdom.Attr.class_ "round-over-title" ]
+                   [ Vdom.Node.text "Round Over!" ]
+               ]
+               @ ranking_nodes)
           ]
         | _ ->
           [ Vdom.Node.div
