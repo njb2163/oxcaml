@@ -25,7 +25,7 @@ let presidents_board
   let render_trick ~current_trick =
     Vdom.Node.div
       ~attrs:[ Vdom.Attr.class_ "trick" ]
-      (List.map current_trick ~f:(fun card ->
+      (List.map (List.rev current_trick) ~f:(fun card ->
          Vdom.Node.img
            ~attrs:[ Vdom.Attr.class_ "card"; Vdom.Attr.src (Card.image_path card) ]
            ()))

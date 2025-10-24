@@ -99,7 +99,6 @@ input {
 .card {
   width: calc(min(100vw, 100vh)/ 10);
   height: calc(min(100vw, 100vh)/ 10);
-  margin-right: 0%;
 }
 
 .card.hoverable {
@@ -175,7 +174,7 @@ input {
 }
 
 .trick .card {
-  margin-right: -10%;
+  margin-right: -7%;
 }
 
 .trick .card:last-child {
@@ -282,7 +281,14 @@ input {
   box-shadow: 0 min(1vw, 1vh) min(3vw, 3vh) rgba(0, 0, 0, 0.5);
   z-index: 1000;
   text-align: center;
-  animation: shake 0.5s;
+  
+  /* Auto-fade after 1 second */
+  animation: shake 0.5s, fadeOut 0.5s 1s forwards;
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; pointer-events: none; }
 }
 
 @keyframes shake {
