@@ -4,7 +4,12 @@ open Hw2_presidents_logic
 open Virtual_dom
 open! Bonsai.Let_syntax
 
-let presidents_board ~(game_state : Game_State.t) ~set_game_state =
+let presidents_board
+      ~(game_state : Game_State.t)
+      ~set_game_state
+      ~(selected_cards : Card.t list)
+      ~set_selected_cards
+  =
   let render_deal_button ~(game_state : Game_State.t) ~set_game_state =
     Vdom.Node.button
       ~attrs:
@@ -33,10 +38,25 @@ let presidents_board ~(game_state : Game_State.t) ~set_game_state =
       ~attrs:[ Vdom.Attr.class_ (Printf.sprintf "hand player_%d" (player.idx + 1)) ]
       (if is_current_player
        then
-         (* Show actual cards for current player *)
+         (* Show actual cards for current player - make them hoverable and clickable *)
          List.map player.hand ~f:(fun card ->
+           let is_selected = List.mem selected_cards card ~equal:Card.equal in
+           let classes =
+             if is_selected then "card hoverable selected" else "card hoverable"
+           in
            Vdom.Node.img
-             ~attrs:[ Vdom.Attr.class_ "card"; Vdom.Attr.src (Card.image_path card) ]
+             ~attrs:
+               [ Vdom.Attr.class_ classes
+               ; Vdom.Attr.src (Card.image_path card)
+               ; Vdom.Attr.on_click (fun _ ->
+                   (* Toggle selection *)
+                   let new_selected =
+                     if is_selected
+                     then List.filter selected_cards ~f:(fun c -> not (Card.equal c card))
+                     else card :: selected_cards
+                   in
+                   set_selected_cards new_selected)
+               ]
              ())
        else
          (* Show card backs for other players *)
@@ -87,9 +107,19 @@ let app =
   let%sub game_state, set_game_state =
     Bonsai.state ~default_model:initial_state (module Game_State)
   in
+  (* Add state for selected cards *)
+  let%sub selected_cards, set_selected_cards =
+    Bonsai.state
+      ~default_model:[]
+      (module struct
+        type t = Card.t list [@@deriving sexp, equal]
+      end)
+  in
   let%arr game_state = game_state
-  and set_game_state = set_game_state in
-  presidents_board ~game_state ~set_game_state
+  and set_game_state = set_game_state
+  and selected_cards = selected_cards
+  and set_selected_cards = set_selected_cards in
+  presidents_board ~game_state ~set_game_state ~selected_cards ~set_selected_cards
 ;;
 
 let () = Bonsai_web.Start.start app
