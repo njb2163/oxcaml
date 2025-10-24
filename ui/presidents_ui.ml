@@ -43,12 +43,17 @@ let presidents_board
       ~attrs:
         [ Vdom.Attr.class_ button_class
         ; Vdom.Attr.on_click (fun _ -> 
-          set_selected_cards [];
           let move = if has_selection then Play.Play { cards = selected_cards } else Play.Pass in
           let player = Player.lookup_player_exn game_state.players idx in
           let new_state = Game_State.make_move game_state player move in
-          set_game_state new_state;
-          set_error_message None;)
+          match new_state with
+          | Ok state -> 
+            Vdom.Effect.Many [
+              set_selected_cards [];
+              set_error_message None;
+              set_game_state state 
+            ]
+          | _ -> set_error_message (Some "Invalid Move") )
         ]
       [ Vdom.Node.text button_text ]
   in
