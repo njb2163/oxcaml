@@ -94,13 +94,20 @@ let presidents_board
                    set_selected_cards new_selected)
                ]
              ())
-       else
+       else (
          (* Show card backs for other players *)
-         List.map player.hand ~f:(fun _ ->
-           Vdom.Node.img
-             ~attrs:
-               [ Vdom.Attr.class_ "card"; Vdom.Attr.src "ui/resources/CARD-BACK.svg" ]
-             ()))
+         let hand_size = List.length player.hand in
+         [ Vdom.Node.div
+             ~attrs:[ Vdom.Attr.class_ "opponent-hand-display" ]
+             [ Vdom.Node.img
+                 ~attrs:
+                   [ Vdom.Attr.class_ "card"; Vdom.Attr.src "ui/resources/CARD-BACK.svg" ]
+                 ()
+             ; Vdom.Node.div
+                 ~attrs:[ Vdom.Attr.class_ "card-count" ]
+                 [ Vdom.Node.text (Printf.sprintf "×%d" hand_size) ]
+             ]
+         ]))
   in
   Vdom.Node.div
     ~attrs:[ Vdom.Attr.class_ "game" ]

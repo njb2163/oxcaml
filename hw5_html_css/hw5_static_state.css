@@ -97,9 +97,9 @@ input {
 }
 
 .card {
-  width: calc(min(100vw, 100vh)/ 8);
-  height: calc(min(100vw, 100vh)/ 8);
-  margin-right: -7%;
+  width: calc(min(100vw, 100vh)/ 10);
+  height: calc(min(100vw, 100vh)/ 10);
+  margin-right: -5%;
 }
 
 .card.hoverable {
@@ -107,27 +107,34 @@ input {
   transition: transform 0.2s ease;
 }
 
-.card.hoverable:hover {
+.player_1 .card.hoverable:hover {
   transform: translateY(-20%);
-  z-index: 100;
+}
+.player_1 .card.hoverable.selected {
+  transform: rotate(90deg) translateY(-120%);
 }
 
-.card.hoverable.selected {
-  transform: translateY(-20%);
-  z-index: 100;
-  /* Optional: add a border or glow to show it's selected */
-  filter: brightness(1.1);
-}
-
-.player_2 .card.hoverable:hover,
-.player_2 .card.hoverable.selected {
+.player_2 .card.hoverable:hover {
   transform: rotate(90deg) translateY(-20%);
 }
+.player_2 .card.hoverable.selected {
+  transform: translateY(-120%);
+}
 
-.player_4 .card.hoverable:hover,
-.player_4 .card.hoverable.selected {
+.player_3 .card.hoverable:hover {
+  transform: translateY(20%);
+}
+.player_3 .card.hoverable.selected {
+  transform: rotate(180deg) translateY(120%);
+}
+
+.player_4 .card.hoverable:hover {
   transform: rotate(90deg) translateY(20%);
 }
+.player_4 .card.hoverable.selected {
+  transform: translateY(120%);
+}
+
 
 .player_4 {
   position: absolute;
@@ -282,4 +289,28 @@ input {
   0%, 100% { transform: translate(-50%, -50%) rotate(0deg); }
   10%, 30%, 50%, 70%, 90% { transform: translate(-50%, -50%) rotate(-2deg); }
   20%, 40%, 60%, 80% { transform: translate(-50%, -50%) rotate(2deg); }
+}
+
+.opponent-hand-display {
+  display: flex;
+  align-items: center;
+  gap: min(2vw, 2vh);
+}
+
+.card-count {
+  font-size: 2em;
+  font-weight: bold;
+  color: white;
+  text-shadow: 
+    -1px -1px 0 #000,  
+    1px -1px 0 #000,
+    -1px 1px 0 #000,
+    1px 1px 0 #000;
+  z-index: 10;
+}
+
+/* Adjust for rotated side players */
+.player_2 .opponent-hand-display,
+.player_4 .opponent-hand-display {
+  flex-direction: column;
 }
