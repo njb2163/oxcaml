@@ -4,12 +4,7 @@ open Hw2_presidents_logic
 open Virtual_dom
 open! Bonsai.Let_syntax
 
-let presidents_board
-      ~(game_state : Game_State.t)
-      ~set_game_state
-      ~(selected_cards : Card.t list)
-      ~set_selected_cards
-  =
+let presidents_board ~(game_state : Game_State.t) ~set_game_state ~(selected_cards : Card.t list) ~set_selected_cards ~(error_message : string option) ~set_error_message =
   let render_deal_button ~(game_state : Game_State.t) ~set_game_state =
     Vdom.Node.button
       ~attrs:
@@ -28,6 +23,45 @@ let presidents_board
            ~attrs:[ Vdom.Attr.class_ "card"; Vdom.Attr.src (Card.image_path card) ]
            ()))
   in
+  let render_action_button ~(selected_cards : Card.t list) ~(is_current_player : bool) ~(current_player_idx : Player_Idx.t option) =
+    if not is_current_player then
+      Vdom.Node.none
+    else
+      let has_selection = not (List.is_empty selected_cards) in
+      let button_text = if has_selection then "PLAY" else "PASS" in
+      let button_class = if has_selection then "action-button play-button" else "action-button pass-button" in
+      Vdom.Node.button
+        ~attrs:
+          [ Vdom.Attr.class_ button_class
+          ; Vdom.Attr.on_click (fun _ ->
+              match current_player_idx with
+              | None -> Effect.Ignore
+              | Some player_idx ->
+                let player = Player.lookup_player_exn game_state.players player_idx in
+                let move =
+                  if has_selection
+                  then Play.Play { Group.cards = selected_cards }
+                  else Play.Pass
+                in
+                (match Game_State.make_move game_state player move with
+                 | Ok new_state ->
+                   set_game_state new_state;
+                   set_selected_cards [];
+                   set_error_message None
+                 | Error _err ->
+                   set_error_message (Some "Invalid Move, Try again"));
+                Effect.Ignore)
+          ]
+        [ Vdom.Node.text button_text ]
+  in
+  let render_error_message ~(error_message : string option) =
+    match error_message with
+    | None -> Vdom.Node.none
+    | Some msg ->
+      Vdom.Node.div
+        ~attrs:[ Vdom.Attr.class_ "error-message" ]
+        [ Vdom.Node.text msg ]
+  in
   let render_hand ~(player : Player.t) ~(current_player_idx : Player_Idx.t option) =
     let is_current_player =
       match current_player_idx with
@@ -41,9 +75,7 @@ let presidents_board
          (* Show actual cards for current player - make them hoverable and clickable *)
          List.map player.hand ~f:(fun card ->
            let is_selected = List.mem selected_cards card ~equal:Card.equal in
-           let classes =
-             if is_selected then "card hoverable selected" else "card hoverable"
-           in
+           let classes = if is_selected then "card hoverable selected" else "card hoverable" in
            Vdom.Node.img
              ~attrs:
                [ Vdom.Attr.class_ classes
@@ -84,11 +116,18 @@ let presidents_board
          | In_progress { whose_turn } -> Some whose_turn
          | _ -> None
        in
+       let is_my_turn =
+        match current_player_idx with
+        | Some idx -> idx = 0  (* Assuming player 0 is the human player *)
+        | None -> false
+      in
        let player_nodes =
          List.map game_state.players ~f:(fun player ->
            render_hand ~player ~current_player_idx)
        in
-       trick_node :: player_nodes
+       let action_button = render_action_button ~selected_cards ~is_current_player:is_my_turn ~current_player_idx in
+       let error_display = render_error_message ~error_message in
+       trick_node :: player_nodes @ [ action_button; error_display ]
      | Phase.RoundEnd ->
        [ Vdom.Node.div
            ~attrs:[ Vdom.Attr.class_ "round-over" ]
@@ -109,17 +148,27 @@ let app =
   in
   (* Add state for selected cards *)
   let%sub selected_cards, set_selected_cards =
-    Bonsai.state
-      ~default_model:[]
+    Bonsai.state 
+      ~default_model:[] 
       (module struct
         type t = Card.t list [@@deriving sexp, equal]
+      end)
+  in
+  (* Add state for error message *)
+  let%sub error_message, set_error_message =
+    Bonsai.state
+      ~default_model:None
+      (module struct
+        type t = string option [@@deriving sexp, equal]
       end)
   in
   let%arr game_state = game_state
   and set_game_state = set_game_state
   and selected_cards = selected_cards
-  and set_selected_cards = set_selected_cards in
-  presidents_board ~game_state ~set_game_state ~selected_cards ~set_selected_cards
+  and set_selected_cards = set_selected_cards
+  and error_message = error_message
+  and set_error_message = set_error_message in
+  presidents_board ~game_state ~set_game_state ~selected_cards ~set_selected_cards ~error_message ~set_error_message
 ;;
 
 let () = Bonsai_web.Start.start app
