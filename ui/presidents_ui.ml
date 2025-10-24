@@ -29,21 +29,19 @@ let presidents_board
            ~attrs:[ Vdom.Attr.class_ "card"; Vdom.Attr.src (Card.image_path card) ]
            ()))
   in
-  let render_action_button ~(selected_cards : Card.t list) ~(is_current_player : bool) =
-    if not is_current_player
-    then Vdom.Node.none
-    else (
-      let has_selection = not (List.is_empty selected_cards) in
-      let button_text = if has_selection then "PLAY" else "PASS" in
-      let button_class =
-        if has_selection then "action-button play-button" else "action-button pass-button"
-      in
-      Vdom.Node.button
-        ~attrs:
-          [ Vdom.Attr.class_ button_class
-          ; Vdom.Attr.on_click (fun _ -> Bonsai.Effect.Ignore)
-          ]
-        [ Vdom.Node.text button_text ])
+  let render_action_button ~(selected_cards : Card.t list)  =
+    let has_selection = not (List.is_empty selected_cards) in
+    let button_text = if has_selection then "PLAY" else "PASS" in
+    let button_class =
+      if has_selection then "action-button play-button" else "action-button pass-button"
+    in
+    Vdom.Node.button
+      ~attrs:
+        [ Vdom.Attr.class_ button_class
+        ; Vdom.Attr.on_click (fun _ -> 
+          set_selected_cards [];)
+        ]
+      [ Vdom.Node.text button_text ]
   in
   let render_error_message ~(error_message : string option) =
     match error_message with
@@ -107,17 +105,12 @@ let presidents_board
          | In_progress { whose_turn } -> Some whose_turn
          | _ -> None
        in
-       let is_my_turn =
-         match current_player_idx with
-         | Some idx -> idx = 0 (* Assuming player 0 is the human player *)
-         | None -> false
-       in
        let player_nodes =
          List.map game_state.players ~f:(fun player ->
            render_hand ~player ~current_player_idx)
        in
        let action_button =
-         render_action_button ~selected_cards ~is_current_player:is_my_turn
+         render_action_button ~selected_cards 
        in
        let error_display = render_error_message ~error_message in
        (trick_node :: player_nodes) @ [ action_button; error_display ]
