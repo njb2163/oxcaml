@@ -104,6 +104,7 @@ let presidents_board
                    [ Vdom.Attr.class_ "card"; Vdom.Attr.src "ui/resources/CARD-BACK.svg" ]
                  ()
              ; Vdom.Node.div
+             (* Put card count so cards dont crowd the screen *)
                  ~attrs:[ Vdom.Attr.class_ "card-count" ]
                  [ Vdom.Node.text (Printf.sprintf "×%d" hand_size) ]
              ]
