@@ -102,17 +102,6 @@ input {
   height: calc(min(100vw, 100vh)/ 10);
 }
 
-@media (max-width: 768px) {
-  .card {
-    width: calc(min(100vw, 100vh) / 15);
-    height: calc(min(100vw, 100vh) / 15);
-  }
-  
-  .player_2 .card, .player_4 .card {
-  margin-bottom: -10%;
-  transform: rotate(90deg);
-}
-}
 
 .card.hoverable {
   cursor: pointer;
@@ -392,4 +381,16 @@ input {
 .ranking-entry:nth-child(3) {
   color: #CD7F32;
   font-weight: bold;
+}
+
+@media (max-width: 768px) {
+  .card {
+    width: calc(min(100vw, 100vh) / 15);
+    height: calc(min(100vw, 100vh) / 15);
+  }
+  
+  .player_2 .card, .player_4 .card {
+  margin-bottom: -10%;
+  transform: rotate(90deg);
+}
 }
