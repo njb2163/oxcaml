@@ -10,6 +10,7 @@ let presidents_board
       ~(selected_cards : Card.t list)
       ~set_selected_cards
       ~(error_message : string option)
+      ~set_error_message
   =
   let render_deal_button ~(game_state : Game_State.t) ~set_game_state =
     Vdom.Node.button
@@ -29,17 +30,25 @@ let presidents_board
            ~attrs:[ Vdom.Attr.class_ "card"; Vdom.Attr.src (Card.image_path card) ]
            ()))
   in
-  let render_action_button ~(selected_cards : Card.t list)  =
+  let render_action_button ~(selected_cards : Card.t list) ~current_player_idx : Vdom.Node.t  =
     let has_selection = not (List.is_empty selected_cards) in
     let button_text = if has_selection then "PLAY" else "PASS" in
     let button_class =
       if has_selection then "action-button play-button" else "action-button pass-button"
     in
+    match current_player_idx with
+    | None -> Vdom.Node.none
+      |Some idx ->
     Vdom.Node.button
       ~attrs:
         [ Vdom.Attr.class_ button_class
         ; Vdom.Attr.on_click (fun _ -> 
-          set_selected_cards [];)
+          set_selected_cards [];
+          let move = if has_selection then Play.Play { cards = selected_cards } else Play.Pass in
+          let player = Player.lookup_player_exn game_state.players idx in
+          let new_state = Game_State.make_move game_state player move in
+          set_game_state new_state;
+          set_error_message None;)
         ]
       [ Vdom.Node.text button_text ]
   in
@@ -110,10 +119,10 @@ let presidents_board
            render_hand ~player ~current_player_idx)
        in
        let action_button =
-         render_action_button ~selected_cards 
+         render_action_button ~selected_cards ~current_player_idx
        in
        let error_display = render_error_message ~error_message in
-       (trick_node :: player_nodes) @ [ action_button; error_display ]
+       player_nodes @ [trick_node ; action_button; error_display ]
      | Phase.RoundEnd ->
        [ Vdom.Node.div
            ~attrs:[ Vdom.Attr.class_ "round-over" ]
@@ -141,7 +150,7 @@ let app =
       end)
   in
   (* Add state for error message *)
-  let%sub error_message, _ =
+  let%sub error_message, set_error_message =
     Bonsai.state
       ~default_model:None
       (module struct
@@ -152,13 +161,15 @@ let app =
   and set_game_state = set_game_state
   and selected_cards = selected_cards
   and set_selected_cards = set_selected_cards
-  and error_message = error_message in
+  and error_message = error_message
+and set_error_message = set_error_message in
   presidents_board
     ~game_state
     ~set_game_state
     ~selected_cards
     ~set_selected_cards
     ~error_message
+    ~set_error_message
 ;;
 
 let () = Bonsai_web.Start.start app
