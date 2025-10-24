@@ -322,3 +322,63 @@ input {
 .player_4 .opponent-hand-display {
   flex-direction: column;
 }
+
+/* Round Over display */
+.round-over {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  
+  background-color: rgba(255, 255, 255, 0.95);
+  padding: min(4vw, 4vh) min(6vw, 6vh);
+  border-radius: min(2vw, 2vh);
+  border: min(0.5vw, 0.5vh) solid #333;
+  box-shadow: 0 min(1.5vw, 1.5vh) min(4vw, 4vh) rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  text-align: center;
+  min-width: 40%;
+}
+
+.round-over-title {
+  font-size: 3em;
+  font-weight: bold;
+  color: #4CAF50;
+  margin-bottom: min(2vw, 2vh);
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.round-ranking {
+  font-size: 1.8em;
+  color: #333;
+  line-height: 1.6;
+  margin-top: min(2vw, 2vh);
+  padding: min(2vw, 2vh);
+  background-color: rgba(240, 240, 240, 0.8);
+  border-radius: min(1vw, 1vh);
+}
+
+/* Individual ranking entries if you use the vertical list version */
+.ranking-entry {
+  font-size: 1.8em;
+  padding: min(1vw, 1vh);
+  margin: min(0.5vw, 0.5vh) 0;
+  color: #333;
+  font-weight: 500;
+}
+
+.ranking-entry:first-child {
+  color: #FFD700;
+  font-weight: bold;
+  font-size: 2em;
+}
+
+.ranking-entry:nth-child(2) {
+  color: #C0C0C0;
+  font-weight: bold;
+}
+
+.ranking-entry:nth-child(3) {
+  color: #CD7F32;
+  font-weight: bold;
+}
