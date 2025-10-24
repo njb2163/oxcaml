@@ -111,7 +111,7 @@ input {
   transform: translateY(-20%);
 }
 .player_1 .card.hoverable.selected {
-  transform: rotate(90deg) translateY(-120%);
+  transform: translateY(-120%);
 }
 
 .player_2 .card.hoverable:hover {
@@ -125,7 +125,7 @@ input {
   transform: translateY(20%);
 }
 .player_3 .card.hoverable.selected {
-  transform: rotate(180deg) translateY(120%);
+  transform: translateY(120%);
 }
 
 .player_4 .card.hoverable:hover {
