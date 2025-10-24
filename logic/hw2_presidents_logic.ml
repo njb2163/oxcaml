@@ -183,16 +183,14 @@ module Group = struct
       then Error Move_error.Illegal_start_on_two
       else Ok ()
     | Some req ->
-      (* Must match count exactly *)
-      if not (Int.equal (count g) (count req))
+      if rules.clear_on_two && Option.equal Card_Rank.equal (rank g) (Some Card_Rank.Two)
+      then if count g > 1 then Error Move_error.Illegal_two_group else Ok ()
+      else if
+        (* Must match count exactly *)
+        not (Int.equal (count g) (count req))
       then
         Error Move_error.Does_not_meet_requirement
         (* Can't play a group of 2s if clear-on-two is enabled *)
-      else if
-        rules.clear_on_two
-        && Option.equal Card_Rank.equal (rank g) (Some Card_Rank.Two)
-        && count g > 1
-      then Error Move_error.Illegal_two_group
       else if Option.compare Card_Rank.compare (rank g) (rank req) < 0
       then Error Move_error.Does_not_meet_requirement
       else Ok ()

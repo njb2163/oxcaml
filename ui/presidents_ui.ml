@@ -30,7 +30,9 @@ let presidents_board
            ~attrs:[ Vdom.Attr.class_ "card"; Vdom.Attr.src (Card.image_path card) ]
            ()))
   in
-  let render_action_button ~(selected_cards : Card.t list) ~current_player_idx : Vdom.Node.t  =
+  let render_action_button ~(selected_cards : Card.t list) ~current_player_idx
+    : Vdom.Node.t
+    =
     let has_selection = not (List.is_empty selected_cards) in
     let button_text = if has_selection then "PLAY" else "PASS" in
     let button_class =
@@ -38,24 +40,23 @@ let presidents_board
     in
     match current_player_idx with
     | None -> Vdom.Node.none
-      |Some idx ->
-    Vdom.Node.button
-      ~attrs:
-        [ Vdom.Attr.class_ button_class
-        ; Vdom.Attr.on_click (fun _ -> 
-          let move = if has_selection then Play.Play { cards = selected_cards } else Play.Pass in
-          let player = Player.lookup_player_exn game_state.players idx in
-          let new_state = Game_State.make_move game_state player move in
-          match new_state with
-          | Ok state -> 
-            Vdom.Effect.Many [
-              set_selected_cards [];
-              set_error_message None;
-              set_game_state state 
-            ]
-          | _ -> set_error_message (Some "Invalid Move") )
-        ]
-      [ Vdom.Node.text button_text ]
+    | Some idx ->
+      Vdom.Node.button
+        ~attrs:
+          [ Vdom.Attr.class_ button_class
+          ; Vdom.Attr.on_click (fun _ ->
+              let move =
+                if has_selection then Play.Play { cards = selected_cards } else Play.Pass
+              in
+              let player = Player.lookup_player_exn game_state.players idx in
+              let new_state = Game_State.make_move game_state player move in
+              match new_state with
+              | Ok state ->
+                Vdom.Effect.Many
+                  [ set_selected_cards []; set_error_message None; set_game_state state ]
+              | _ -> set_error_message (Some "Invalid Move"))
+          ]
+        [ Vdom.Node.text button_text ]
   in
   let render_error_message ~(error_message : string option) =
     match error_message with
@@ -123,11 +124,9 @@ let presidents_board
          List.map game_state.players ~f:(fun player ->
            render_hand ~player ~current_player_idx)
        in
-       let action_button =
-         render_action_button ~selected_cards ~current_player_idx
-       in
+       let action_button = render_action_button ~selected_cards ~current_player_idx in
        let error_display = render_error_message ~error_message in
-       player_nodes @ [trick_node ; action_button; error_display ]
+       player_nodes @ [ trick_node; action_button; error_display ]
      | Phase.RoundEnd ->
        [ Vdom.Node.div
            ~attrs:[ Vdom.Attr.class_ "round-over" ]
@@ -167,7 +166,7 @@ let app =
   and selected_cards = selected_cards
   and set_selected_cards = set_selected_cards
   and error_message = error_message
-and set_error_message = set_error_message in
+  and set_error_message = set_error_message in
   presidents_board
     ~game_state
     ~set_game_state

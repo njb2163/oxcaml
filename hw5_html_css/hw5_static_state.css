@@ -97,25 +97,23 @@ input {
 }
 
 .card {
-  width: calc(min(100vw, 100vh)/ 7);
-  height: calc(min(100vw, 100vh)/ 7);
-  margin-right: -10%;
+  width: calc(min(100vw, 100vh)/ 8);
+  height: calc(min(100vw, 100vh)/ 8);
+  margin-right: -7%;
 }
 
 .card.hoverable {
   cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: transform 0.2s ease;
 }
 
 .card.hoverable:hover {
   transform: translateY(-20%);
-  box-shadow: 0 min(1vw, 1vh) min(2vw, 2vh) rgba(0, 0, 0, 0.4);
   z-index: 100;
 }
 
 .card.hoverable.selected {
   transform: translateY(-20%);
-  box-shadow: 0 min(1vw, 1vh) min(2vw, 2vh) rgba(0, 0, 0, 0.4);
   z-index: 100;
   /* Optional: add a border or glow to show it's selected */
   filter: brightness(1.1);
@@ -123,12 +121,12 @@ input {
 
 .player_2 .card.hoverable:hover,
 .player_2 .card.hoverable.selected {
-  transform: translateX(20%);
+  transform: rotate(90deg) translateY(-20%);
 }
 
 .player_4 .card.hoverable:hover,
 .player_4 .card.hoverable.selected {
-  transform: translateX(-20%);
+  transform: rotate(90deg) translateY(20%);
 }
 
 .player_4 {
@@ -153,7 +151,7 @@ input {
 
 .player_2 .card, .player_4 .card {
   margin-right: 0;
-  margin-bottom: -80%;
+  margin-bottom: -75%;
   transform: rotate(90deg);
 }
 
