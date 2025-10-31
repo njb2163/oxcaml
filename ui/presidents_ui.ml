@@ -5,10 +5,8 @@ open Virtual_dom
 open! Bonsai.Let_syntax
 open Js_of_ocaml
 
-let log s = Js_of_ocaml.Firebug.console##log (Js.string s)
 
 let send_firestore_click () =
-  log "[Firestore] send_firestore_click called";
   let xhr = XmlHttpRequest.create () in
   let url =
     "https://firestore.googleapis.com/v1/projects/presidents-game/databases/(default)/documents/test?key=AIzaSyAhgME9mU9-4G4vKi-5nuZBHt4Xur96XMw"
@@ -16,9 +14,7 @@ let send_firestore_click () =
   xhr##_open (Js.string "POST") (Js.string url) Js._true;
   xhr##setRequestHeader (Js.string "Content-Type") (Js.string "application/json");
   let body = Js.string {|{"fields":{"clicked":{"stringValue":"yes"}}}|} in
-  log "[Firestore] Sending request...";
   ignore (xhr##send (Js.Opt.return body));
-  log "[Firestore] request sent...";
 ;;
 
 let presidents_board
@@ -34,7 +30,6 @@ let presidents_board
       ~attrs:
         [ Vdom.Attr.class_ "deal-button"
         ; Vdom.Attr.on_click (fun _ ->
-          log "[UI] Deal button clicked";
             send_firestore_click ();
             let new_state = Game_State.deal_cards game_state in
             set_game_state new_state)
