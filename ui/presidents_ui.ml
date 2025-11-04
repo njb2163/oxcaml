@@ -2,7 +2,8 @@ open! Core
 open Tictactoe_logic_library
 open Hw2_presidents_logic
 open Virtual_dom
-open! Bonsai.Let_syntax
+open Async
+open Bonsai.Let_syntax
 open Js_of_ocaml
 
 (* Lobby screen state *)
@@ -20,7 +21,6 @@ module Lobby_screen = struct
   [@@deriving sexp, equal]
 end
 
-
 (* Generate a short, readable game ID *)
 let generate_game_id () =
   let timestamp = int_of_float (Js.to_float (new%js Js.date_now)##getTime) in
@@ -28,8 +28,10 @@ let generate_game_id () =
   Printf.sprintf "%d-%d" timestamp random_suffix
 ;;
 
-(* Create a new lobby in Firebase *)
-let create_lobby ~set_lobby_screen ~set_error_message =
+(* Pure async function - returns a Deferred *)
+let create_lobby_async () : (string * string list, string) Result.t Async.Deferred.t =
+  let open Async in
+  let ivar = Ivar.create () in
   let game_id = generate_game_id () in
   let xhr = XmlHttpRequest.create () in
   let url =
@@ -55,29 +57,19 @@ let create_lobby ~set_lobby_screen ~set_error_message =
        | XmlHttpRequest.DONE ->
          let status = xhr##.status in
          if status >= 200 && status < 300
-         then
-           ignore
-             (set_lobby_screen
-                (Lobby_screen.In_lobby
-                   { game_id; players = [ "Player 1" ]; is_host = true }))
-         else
-           ignore
-             (Vdom.Effect.Many
-                [ set_lobby_screen Lobby_screen.Main_menu
-                ; set_error_message
-                    (Some (Printf.sprintf "Failed to create lobby: %d" status))
-                ])
+         then Ivar.fill ivar (Ok (game_id, [ "Player 1" ]))
+         else Ivar.fill ivar (Error (Printf.sprintf "Failed: %d" status))
        | _ -> ());
-  ignore (xhr##send (Js.Opt.return (Js.string body_json)))
+  ignore (xhr##send (Js.Opt.return (Js.string body_json)));
+  Ivar.read ivar
+;;
+
+let create_lobby_effect : unit -> (string * string list, string) Result.t Vdom.Effect.t =
+  Bonsai_web.Effect.of_deferred_fun create_lobby_async
 ;;
 
 (* Join an existing lobby *)
-let join_lobby
-      ~game_id
-      ~player_name
-      ~set_lobby_screen
-      ~set_error_message
-  =
+let join_lobby ~game_id ~player_name ~set_lobby_screen ~set_error_message =
   let xhr = XmlHttpRequest.create () in
   (* First, fetch the current lobby to get existing players *)
   let url =
@@ -94,22 +86,20 @@ let join_lobby
          if status >= 200 && status < 300
          then
            (* Parse response and add player (simplified - you'd need proper JSON parsing) *)
-           ignore (Vdom.Effect.Many
-                            [ set_lobby_screen
-                                (Lobby_screen.In_lobby
-                                   { game_id = game_id
-                                   ;  players = [ "Player 1"; player_name ]
-                                   ; is_host = false
-                                   })
-                            ; set_error_message None
-                            ])
+           ignore
+             (Vdom.Effect.Many
+                [ set_lobby_screen
+                    (Lobby_screen.In_lobby
+                       { game_id; players = [ "Player 1"; player_name ]; is_host = false })
+                ; set_error_message None
+                ])
          else if status = 404
-         then ignore( set_error_message (Some "Lobby not found"))
-         else ignore (set_error_message (Some (Printf.sprintf "Failed to join: %d" status)))
+         then ignore (set_error_message (Some "Lobby not found"))
+         else
+           ignore (set_error_message (Some (Printf.sprintf "Failed to join: %d" status)))
        | _ -> ());
   ignore (xhr##send Js.null)
 ;;
-
 
 (* Start the game (host only) *)
 let start_game ~game_id ~game_state ~set_game_state ~set_lobby_screen ~set_error_message =
@@ -138,7 +128,6 @@ let start_game ~game_id ~game_state ~set_game_state ~set_lobby_screen ~set_error
   ignore (xhr##send (Js.Opt.return (Js.string body_json)))
 ;;
 
-
 let presidents_board
       ~(game_state : Game_State.t)
       ~set_game_state
@@ -162,9 +151,21 @@ let presidents_board
           ~attrs:
             [ Vdom.Attr.class_ "menu-button create-button"
             ; Vdom.Attr.on_click (fun _ ->
-                (* Trigger async operation but ignore the immediate effect *)
-                create_lobby ~set_lobby_screen ~set_error_message;
-                set_lobby_screen Lobby_screen.Creating_lobby)
+                let open Vdom.Effect.Let_syntax in
+                (* Step 1: Set loading state immediately *)
+                let%bind () = set_lobby_screen Lobby_screen.Creating_lobby in
+                (* Step 2: Wait for the async call to complete *)
+                let%bind result = create_lobby_effect () in
+                (* Step 3: Update state based on result *)
+                match result with
+                | Ok (game_id, players) ->
+                  set_lobby_screen
+                    (Lobby_screen.In_lobby { game_id; players; is_host = true })
+                | Error err ->
+                  Vdom.Effect.Many
+                    [ set_lobby_screen Lobby_screen.Main_menu
+                    ; set_error_message (Some err)
+                    ])
             ]
           [ Vdom.Node.text "Create Lobby" ]
       ; Vdom.Node.button
@@ -207,14 +208,13 @@ let presidents_board
                 ; Vdom.Attr.on_click (fun _ ->
                     if String.is_empty join_game_id_input
                     then set_error_message (Some "Please enter a Game ID")
-                    else(
+                    else (
                       join_lobby
                         ~game_id:join_game_id_input
                         ~player_name:"Player 2"
                         ~set_lobby_screen
-                        ~set_error_message
-                        ;
-                    set_lobby_screen Lobby_screen.Joining_lobby))
+                        ~set_error_message;
+                      set_lobby_screen Lobby_screen.Joining_lobby))
                 ]
               [ Vdom.Node.text "Join" ]
           ; Vdom.Node.button
@@ -283,7 +283,7 @@ let presidents_board
                           ~set_game_state
                           ~set_lobby_screen
                           ~set_error_message;
-                          Vdom.Effect.Ignore)
+                        Vdom.Effect.Ignore)
                     ]
                   [ Vdom.Node.text "Start Game" ]
               ]

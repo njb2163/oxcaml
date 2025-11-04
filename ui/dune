@@ -1,6 +1,12 @@
 (executables
  (modes js)
  (names presidents_ui)
- (libraries bonsai.web core virtual_dom tictactoe_logic_library js_of_ocaml)
+ (libraries
+  bonsai.web
+  core
+  virtual_dom
+  tictactoe_logic_library
+  js_of_ocaml
+  async)
  (preprocess
   (pps js_of_ocaml-ppx ppx_jane bonsai.ppx_bonsai)))
