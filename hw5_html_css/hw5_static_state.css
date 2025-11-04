@@ -397,3 +397,199 @@ input {
   margin-right: -4%;
 }
 }
+
+/* ========== LOBBY SCREENS ========== */
+
+/* Main Menu */
+.main-menu {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: min(3vw, 3vh);
+  padding: min(4vw, 4vh);
+}
+
+.main-menu h1 {
+  font-size: 3em;
+  color: #333;
+  margin: 0;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.menu-button {
+  font-size: 1.8em;
+  padding: min(2vw, 2vh) min(6vw, 6vh);
+  background-color: #4CAF50;
+  color: white;
+  border: min(0.3vw, 0.3vh) solid #45a049;
+  border-radius: min(1vw, 1vh);
+  cursor: pointer;
+  font-weight: bold;
+  box-shadow: 0 min(0.4vw, 0.4vh) min(0.8vw, 0.8vh) rgba(0, 0, 0, 0.3);
+  transition: all 0.2s ease;
+  min-width: min(30vw, 30vh);
+}
+
+.menu-button:hover {
+  background-color: #45a049;
+  transform: scale(1.05);
+}
+
+.menu-button:active {
+  transform: scale(0.95);
+}
+
+/* Join Lobby Screen */
+.join-lobby-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: min(2vw, 2vh);
+  padding: min(4vw, 4vh);
+}
+
+.join-lobby-screen h2 {
+  font-size: 2.5em;
+  color: #333;
+  margin: 0;
+}
+
+.input-container {
+  display: flex;
+  flex-direction: column;
+  gap: min(1vw, 1vh);
+  width: 80%;
+  max-width: min(50vw, 50vh);
+}
+
+.input-container label {
+  font-size: 1.5em;
+  font-weight: bold;
+  color: #333;
+}
+
+.game-id-input {
+  font-size: 1.5em;
+  padding: min(1.5vw, 1.5vh);
+  border: min(0.3vw, 0.3vh) solid #ccc;
+  border-radius: min(0.8vw, 0.8vh);
+  text-align: center;
+}
+
+.button-group {
+  display: flex;
+  gap: min(2vw, 2vh);
+  justify-content: center;
+}
+
+.back-button {
+  background-color: #757575;
+  border-color: #616161;
+}
+
+.back-button:hover {
+  background-color: #616161;
+}
+
+/* Lobby Waiting Screen */
+.lobby-waiting-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: min(2vw, 2vh);
+  padding: min(4vw, 4vh);
+}
+
+.lobby-waiting-screen h2 {
+  font-size: 2.5em;
+  color: #333;
+  margin: 0;
+}
+
+.game-id-display {
+  font-size: 1.8em;
+  background-color: rgba(255, 255, 255, 0.9);
+  padding: min(2vw, 2vh) min(4vw, 4vh);
+  border-radius: min(1vw, 1vh);
+  border: min(0.3vw, 0.3vh) solid #333;
+}
+
+.game-id-value {
+  font-family: monospace;
+  font-weight: bold;
+  color: #2196F3;
+}
+
+.players-section {
+  width: 80%;
+  max-width: min(50vw, 50vh);
+  text-align: center;
+}
+
+.players-section h3 {
+  font-size: 2em;
+  margin: 0 0 min(1vw, 1vh) 0;
+}
+
+.players-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.player-item {
+  font-size: 1.6em;
+  padding: min(1vw, 1vh);
+  background-color: rgba(255, 255, 255, 0.8);
+  margin: min(0.5vw, 0.5vh) 0;
+  border-radius: min(0.5vw, 0.5vh);
+}
+
+.player-count {
+  font-size: 1.4em;
+  color: #666;
+  margin-top: min(1vw, 1vh);
+}
+
+.lobby-actions {
+  display: flex;
+  gap: min(2vw, 2vh);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.start-game-button {
+  background-color: #4CAF50;
+  border-color: #45a049;
+}
+
+.start-game-button:hover {
+  background-color: #45a049;
+}
+
+.leave-button {
+  background-color: #f44336;
+  border-color: #d32f2f;
+}
+
+.leave-button:hover {
+  background-color: #d32f2f;
+}
+
+.waiting-message {
+  font-size: 1.6em;
+  color: #666;
+  font-style: italic;
+}
+
+/* Loading State */
+.loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 2.5em;
+  color: #333;
+  font-weight: bold;
+}
