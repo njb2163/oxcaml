@@ -563,7 +563,7 @@ let app =
   in
   (* Add lobby screen state *)
   let%sub lobby_screen, set_lobby_screen =
-    Bonsai.state ~default_model:Lobby_screen.Playing (module Lobby_screen)
+    Bonsai.state ~default_model:Lobby_screen.Main_menu (module Lobby_screen)
   in
   (* Add join game ID input state *)
   let%sub join_game_id_input, set_join_game_id_input =
