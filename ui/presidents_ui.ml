@@ -68,37 +68,82 @@ let create_lobby_effect : unit -> (string * string list, string) Result.t Vdom.E
   Bonsai_web.Effect.of_deferred_fun create_lobby_async
 ;;
 
-(* Join an existing lobby *)
-let join_lobby ~game_id ~player_name ~set_lobby_screen ~set_error_message =
-  let xhr = XmlHttpRequest.create () in
-  (* First, fetch the current lobby to get existing players *)
-  let url =
+(* Join an existing lobby - returns a Deferred *)
+let join_lobby_async ~game_id
+  : (string * string list * int, string) Result.t Async.Deferred.t
+  =
+  let open Async in
+  let ivar = Ivar.create () in
+  (* Step 1: Fetch the current lobby data *)
+  let xhr_get = XmlHttpRequest.create () in
+  let get_url =
     Printf.sprintf
       "https://firestore.googleapis.com/v1/projects/presidents-game/databases/(default)/documents/lobbies/%s?key=AIzaSyAhgME9mU9-4G4vKi-5nuZBHt4Xur96XMw"
       game_id
   in
-  xhr##_open (Js.string "GET") (Js.string url) Js._true;
-  xhr##.onreadystatechange
+  xhr_get##_open (Js.string "GET") (Js.string get_url) Js._true;
+  xhr_get##.onreadystatechange
   := Js.wrap_callback (fun _ ->
-       match xhr##.readyState with
+       match xhr_get##.readyState with
        | XmlHttpRequest.DONE ->
-         let status = xhr##.status in
-         if status >= 200 && status < 300
-         then
-           (* Parse response and add player (simplified - you'd need proper JSON parsing) *)
-           ignore
-             (Vdom.Effect.Many
-                [ set_lobby_screen
-                    (Lobby_screen.In_lobby
-                       { game_id; players = [ "Player 1"; player_name ]; is_host = false })
-                ; set_error_message None
-                ])
-         else if status = 404
-         then ignore (set_error_message (Some "Lobby not found"))
-         else
-           ignore (set_error_message (Some (Printf.sprintf "Failed to join: %d" status)))
+         let status = xhr_get##.status in
+         if status = 404
+         then Ivar.fill ivar (Error "Lobby not found")
+         else if status >= 200 && status < 300
+         then (
+           (* TODO: Parse the JSON response to get current players *)
+           (* For now, simplified: assume we can extract player count *)
+           (* In reality, you'd parse xhr_get##.responseText *)
+
+           (* Step 2: Update the lobby by adding the new player *)
+           let xhr_patch = XmlHttpRequest.create () in
+           let patch_url =
+             Printf.sprintf
+               "https://firestore.googleapis.com/v1/projects/presidents-game/databases/(default)/documents/lobbies/%s?updateMask.fieldPaths=players&key=AIzaSyAhgME9mU9-4G4vKi-5nuZBHt4Xur96XMw"
+               game_id
+           in
+           xhr_patch##_open (Js.string "PATCH") (Js.string patch_url) Js._true;
+           xhr_patch##setRequestHeader
+             (Js.string "Content-Type")
+             (Js.string "application/json");
+           (* Simplified: hardcoded player list with new player added *)
+           (* In reality, parse existing players from GET response and append *)
+           let updated_players = [ "Player 1"; "Player 2" ] in
+           let player_idx = List.length updated_players - 1 in
+           let body_json =
+             Printf.sprintf
+               {|{"fields":{
+              "players":{"arrayValue":{"values":[
+                {"stringValue":"Player 1"},
+                {"stringValue":"%s"}
+              ]}}
+            }}|}
+               "Player 2"
+           in
+           xhr_patch##.onreadystatechange
+           := Js.wrap_callback (fun _ ->
+             match xhr_patch##.readyState with
+             | XmlHttpRequest.DONE ->
+               let patch_status = xhr_patch##.status in
+               if patch_status >= 200 && patch_status < 300
+               then Ivar.fill ivar (Ok (game_id, updated_players, player_idx))
+               else
+                 Ivar.fill
+                   ivar
+                   (Error (Printf.sprintf "Failed to update lobby: %d" patch_status))
+             | _ -> ());
+           ignore (xhr_patch##send (Js.Opt.return (Js.string body_json))))
+         else Ivar.fill ivar (Error (Printf.sprintf "Failed to fetch lobby: %d" status))
        | _ -> ());
-  ignore (xhr##send Js.null)
+  ignore (xhr_get##send Js.null);
+  Ivar.read ivar
+;;
+
+(* Convert to effect *)
+let join_lobby_effect ~game_id
+  : (string * string list * int, string) Result.t Vdom.Effect.t
+  =
+  Bonsai_web.Effect.of_deferred_fun (fun () -> join_lobby_async ~game_id) ()
 ;;
 
 (* Start the game (host only) *)
@@ -131,6 +176,8 @@ let start_game ~game_id ~game_state ~set_game_state ~set_lobby_screen ~set_error
 let presidents_board
       ~(game_state : Game_State.t)
       ~set_game_state
+      ~(viewer_id : int)
+      ~set_viewer_id
       ~(selected_cards : Card.t list)
       ~set_selected_cards
       ~(error_message : string option)
@@ -159,8 +206,11 @@ let presidents_board
                 (* Step 3: Update state based on result *)
                 match result with
                 | Ok (game_id, players) ->
-                  set_lobby_screen
-                    (Lobby_screen.In_lobby { game_id; players; is_host = true })
+                  Vdom.Effect.Many
+                    [ set_viewer_id 0 (* Host is always player 0 *)
+                    ; set_lobby_screen
+                        (Lobby_screen.In_lobby { game_id; players; is_host = true })
+                    ]
                 | Error err ->
                   Vdom.Effect.Many
                     [ set_lobby_screen Lobby_screen.Main_menu
@@ -208,13 +258,25 @@ let presidents_board
                 ; Vdom.Attr.on_click (fun _ ->
                     if String.is_empty join_game_id_input
                     then set_error_message (Some "Please enter a Game ID")
-                    else (
-                      join_lobby
-                        ~game_id:join_game_id_input
-                        ~player_name:"Player 2"
-                        ~set_lobby_screen
-                        ~set_error_message;
-                      set_lobby_screen Lobby_screen.Joining_lobby))
+                    else
+                      let open Vdom.Effect.Let_syntax in
+                      (* Step 1: Set loading state immediately *)
+                      let%bind () = set_lobby_screen Lobby_screen.Joining_lobby in
+                      (* Step 2: Wait for the async call to complete *)
+                      let%bind result = join_lobby_effect ~game_id:join_game_id_input in
+                      (* Step 3: Update state based on result *)
+                      match result with
+                      | Ok (game_id, players, player_idx) ->
+                        Vdom.Effect.Many
+                          [ set_viewer_id player_idx (* Host is always player 0 *)
+                          ; set_lobby_screen
+                              (Lobby_screen.In_lobby { game_id; players; is_host = true })
+                          ]
+                      | Error err ->
+                        Vdom.Effect.Many
+                          [ set_lobby_screen Lobby_screen.Main_menu
+                          ; set_error_message (Some err)
+                          ])
                 ]
               [ Vdom.Node.text "Join" ]
           ; Vdom.Node.button
@@ -330,33 +392,28 @@ let presidents_board
            ~attrs:[ Vdom.Attr.class_ "card"; Vdom.Attr.src (Card.image_path card) ]
            ()))
   in
-  let render_action_button ~(selected_cards : Card.t list) ~current_player_idx
-    : Vdom.Node.t
-    =
+  let render_action_button ~(selected_cards : Card.t list) : Vdom.Node.t =
     let has_selection = not (List.is_empty selected_cards) in
     let button_text = if has_selection then "PLAY" else "PASS" in
     let button_class =
       if has_selection then "action-button play-button" else "action-button pass-button"
     in
-    match current_player_idx with
-    | None -> Vdom.Node.none
-    | Some idx ->
-      Vdom.Node.button
-        ~attrs:
-          [ Vdom.Attr.class_ button_class
-          ; Vdom.Attr.on_click (fun _ ->
-              let move =
-                if has_selection then Play.Play { cards = selected_cards } else Play.Pass
-              in
-              let player = Player.lookup_player_exn game_state.players idx in
-              let new_state = Game_State.make_move game_state player move in
-              match new_state with
-              | Ok state ->
-                Vdom.Effect.Many
-                  [ set_selected_cards []; set_error_message None; set_game_state state ]
-              | _ -> set_error_message (Some "Invalid Move"))
-          ]
-        [ Vdom.Node.text button_text ]
+    Vdom.Node.button
+      ~attrs:
+        [ Vdom.Attr.class_ button_class
+        ; Vdom.Attr.on_click (fun _ ->
+            let move =
+              if has_selection then Play.Play { cards = selected_cards } else Play.Pass
+            in
+            let player = Player.lookup_player_exn game_state.players viewer_id in
+            let new_state = Game_State.make_move game_state player move in
+            match new_state with
+            | Ok state ->
+              Vdom.Effect.Many
+                [ set_selected_cards []; set_error_message None; set_game_state state ]
+            | _ -> set_error_message (Some "Invalid Move"))
+        ]
+      [ Vdom.Node.text button_text ]
   in
   let render_error_message ~(error_message : string option) =
     match error_message with
@@ -364,49 +421,45 @@ let presidents_board
     | Some msg ->
       Vdom.Node.div ~attrs:[ Vdom.Attr.class_ "error-message" ] [ Vdom.Node.text msg ]
   in
-  let render_hand ~(player : Player.t) ~(current_player_idx : Player_Idx.t option) =
-    let is_current_player =
-      match current_player_idx with
-      | Some idx -> player.idx = idx
-      | None -> false
-    in
-    let max_players = 4
-  in
-  if is_current_player
-       then
-    Vdom.Node.div
-      ~attrs:[ Vdom.Attr.class_ (Printf.sprintf "hand player_%d" (1)) ]
-      (
-         (* Show actual cards for current player - make them hoverable and clickable *)
-         List.map player.hand ~f:(fun card ->
-           let is_selected = List.mem selected_cards card ~equal:Card.equal in
-           let classes =
-             if is_selected then "card hoverable selected" else "card hoverable"
-           in
-           Vdom.Node.img
-             ~attrs:
-               [ Vdom.Attr.class_ classes
-               ; Vdom.Attr.src (Card.image_path card)
-               ; Vdom.Attr.on_click (fun _ ->
-                   (* Toggle selection *)
-                   let new_selected =
-                     if is_selected
-                     then List.filter selected_cards ~f:(fun c -> not (Card.equal c card))
-                     else card :: selected_cards
-                   in
-                   set_selected_cards new_selected)
-               ]
-             ()))
-    else 
-      let cur_idx = 
-        match current_player_idx with
-        | Some idx -> idx
-        | None -> 0
-      in
+  let render_hand ~(player : Player.t) =
+    let is_current_player = player.idx = viewer_id in
+    let max_players = 4 in
+    if is_current_player
+    then
       Vdom.Node.div
-      ~attrs:[ Vdom.Attr.class_ (Printf.sprintf "hand player_%d" (((player.idx - cur_idx) % max_players) + 1)) ]
-      (
-         (* Show card backs for other players *)
+        ~attrs:[ Vdom.Attr.class_ "hand player_1" ]
+        ((* Show actual cards for current player - make them hoverable and clickable *)
+         List.map
+           player.hand
+           ~f:(fun card ->
+             let is_selected = List.mem selected_cards card ~equal:Card.equal in
+             let classes =
+               if is_selected then "card hoverable selected" else "card hoverable"
+             in
+             Vdom.Node.img
+               ~attrs:
+                 [ Vdom.Attr.class_ classes
+                 ; Vdom.Attr.src (Card.image_path card)
+                 ; Vdom.Attr.on_click (fun _ ->
+                     (* Toggle selection *)
+                     let new_selected =
+                       if is_selected
+                       then
+                         List.filter selected_cards ~f:(fun c -> not (Card.equal c card))
+                       else card :: selected_cards
+                     in
+                     set_selected_cards new_selected)
+                 ]
+               ()))
+    else
+      Vdom.Node.div
+        ~attrs:
+          [ Vdom.Attr.class_
+              (Printf.sprintf
+                 "hand player_%d"
+                 (((player.idx - viewer_id) % max_players) + 1))
+          ]
+        ((* Show card backs for other players *)
          let hand_size = List.length player.hand in
          [ Vdom.Node.div
              ~attrs:[ Vdom.Attr.class_ "opponent-hand-display" ]
@@ -419,7 +472,6 @@ let presidents_board
                  [ Vdom.Node.text (Printf.sprintf "×%d" hand_size) ]
              ]
          ])
-       
   in
   let render_game_screen () =
     Vdom.Node.div
@@ -435,16 +487,10 @@ let presidents_board
          let trick_node =
            render_trick ~current_trick:(Table_State.cards_in_trick game_state.table)
          in
-         let current_player_idx =
-           match game_state.decision with
-           | In_progress { whose_turn } -> Some whose_turn
-           | _ -> None
-         in
          let player_nodes =
-           List.map game_state.players ~f:(fun player ->
-             render_hand ~player ~current_player_idx)
+           List.map game_state.players ~f:(fun player -> render_hand ~player)
          in
-         let action_button = render_action_button ~selected_cards ~current_player_idx in
+         let action_button = render_action_button ~selected_cards in
          let error_display = render_error_message ~error_message in
          [ trick_node; action_button; error_display ] @ player_nodes
        | Phase.RoundEnd ->
@@ -494,6 +540,13 @@ let app =
   let%sub game_state, set_game_state =
     Bonsai.state ~default_model:initial_state (module Game_State)
   in
+  let%sub viewer_id, set_viewer_id =
+    Bonsai.state
+      ~default_model:0
+      (module struct
+        type t = int [@@deriving sexp, equal]
+      end)
+  in
   let%sub selected_cards, set_selected_cards =
     Bonsai.state
       ~default_model:[]
@@ -522,6 +575,8 @@ let app =
   in
   let%arr game_state = game_state
   and set_game_state = set_game_state
+  and viewer_id = viewer_id
+  and set_viewer_id = set_viewer_id
   and selected_cards = selected_cards
   and set_selected_cards = set_selected_cards
   and error_message = error_message
@@ -533,6 +588,8 @@ let app =
   presidents_board
     ~game_state
     ~set_game_state
+    ~viewer_id
+    ~set_viewer_id
     ~selected_cards
     ~set_selected_cards
     ~error_message
