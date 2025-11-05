@@ -370,10 +370,13 @@ let presidents_board
       | Some idx -> player.idx = idx
       | None -> false
     in
-    Vdom.Node.div
-      ~attrs:[ Vdom.Attr.class_ (Printf.sprintf "hand player_%d" (player.idx + 1)) ]
-      (if is_current_player
+    let max_players = 4
+  in
+  if is_current_player
        then
+    Vdom.Node.div
+      ~attrs:[ Vdom.Attr.class_ (Printf.sprintf "hand player_%d" (1)) ]
+      (
          (* Show actual cards for current player - make them hoverable and clickable *)
          List.map player.hand ~f:(fun card ->
            let is_selected = List.mem selected_cards card ~equal:Card.equal in
@@ -393,8 +396,16 @@ let presidents_board
                    in
                    set_selected_cards new_selected)
                ]
-             ())
-       else (
+             ()))
+    else 
+      let cur_idx = 
+        match current_player_idx with
+        | Some idx -> idx
+        | None -> 0
+      in
+      Vdom.Node.div
+      ~attrs:[ Vdom.Attr.class_ (Printf.sprintf "hand player_%d" (((player.idx - cur_idx) % max_players) + 1)) ]
+      (
          (* Show card backs for other players *)
          let hand_size = List.length player.hand in
          [ Vdom.Node.div
@@ -407,7 +418,8 @@ let presidents_board
                  ~attrs:[ Vdom.Attr.class_ "card-count" ]
                  [ Vdom.Node.text (Printf.sprintf "×%d" hand_size) ]
              ]
-         ]))
+         ])
+       
   in
   let render_game_screen () =
     Vdom.Node.div
@@ -498,7 +510,7 @@ let app =
   in
   (* Add lobby screen state *)
   let%sub lobby_screen, set_lobby_screen =
-    Bonsai.state ~default_model:Lobby_screen.Main_menu (module Lobby_screen)
+    Bonsai.state ~default_model:Lobby_screen.Playing (module Lobby_screen)
   in
   (* Add join game ID input state *)
   let%sub join_game_id_input, set_join_game_id_input =
