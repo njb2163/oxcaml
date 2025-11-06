@@ -105,7 +105,51 @@ let join_lobby_async ~game_id
            (* TODO: Parse the JSON response to get current players *)
            (* For now, simplified: assume we can extract player count *)
            (* In reality, you'd parse xhr_get##.responseText *)
+           let response_text = xhr_get##.responseText in
+           let json = Js.Unsafe.global##._JSON##parse response_text in
+           let players_array =
+             Js.Unsafe.get
+               (Js.Unsafe.get
+                  (Js.Unsafe.get (Js.Unsafe.get json "fields") "players")
+                  "arrayValue")
+               "values"
+           in
+           (* Extract player names from the array *)
+           let existing_players = ref [] in
+           let length = players_array##.length in
+           for i = 0 to length - 1 do
+             let player_obj = Js.array_get players_array i in
+             match Js.Optdef.to_option player_obj with
+             | Some obj ->
+               let name_js = Js.Unsafe.get obj "stringValue" in
+               let name = Js.to_string name_js in
+               existing_players := !existing_players @ [ name ]
+             | None -> ()
+           done;
+           let existing_players = !existing_players in
+           logf
+             "[Firebase] Existing players: %s"
+             (String.concat ~sep:"," existing_players);
 
+           (* Add new player *)
+           if List.length existing_players >= 4
+           then Ivar.fill ivar (Error "Lobby is full")
+           else
+           let new_player_num = List.length existing_players + 1 in
+           let new_player_name = Printf.sprintf "Player %d" new_player_num in
+           let updated_players = existing_players @ [ new_player_name ] in
+           let player_idx = List.length updated_players - 1 in
+           (* Build Firestore JSON *)
+           let player_values =
+             List.map updated_players ~f:(fun name ->
+               Printf.sprintf {|{"stringValue":"%s"}|} name)
+             |> String.concat ~sep:","
+           in
+           let body_json =
+             Printf.sprintf
+               {|{"fields":{"players":{"arrayValue":{"values":[%s]}}}}|}
+               player_values
+           in
            (* Step 2: Update the lobby by adding the new player *)
            let xhr_patch = XmlHttpRequest.create () in
            let patch_url =
@@ -117,20 +161,6 @@ let join_lobby_async ~game_id
            xhr_patch##setRequestHeader
              (Js.string "Content-Type")
              (Js.string "application/json");
-           (* Simplified: hardcoded player list with new player added *)
-           (* In reality, parse existing players from GET response and append *)
-           let updated_players = [ "Player 1"; "Player 2" ] in
-           let player_idx = List.length updated_players - 1 in
-           let body_json =
-             Printf.sprintf
-               {|{"fields":{
-              "players":{"arrayValue":{"values":[
-                {"stringValue":"Player 1"},
-                {"stringValue":"%s"}
-              ]}}
-            }}|}
-               "Player 2"
-           in
            xhr_patch##.onreadystatechange
            := Js.wrap_callback (fun _ ->
              match xhr_patch##.readyState with
