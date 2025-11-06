@@ -208,17 +208,36 @@ let join_lobby_effect ~game_id
   Bonsai_web.Effect.of_deferred_fun (fun () -> join_lobby_async ~game_id) ()
 ;;
 
-(* Start the game (host only) *)
-let start_game ~game_id ~game_state ~set_game_state ~set_lobby_screen ~set_error_message =
+(* Start the game (host only) - async version *)
+let start_game_async ~game_id ~game_state
+  : (Game_State.t, string) Result.t Async_kernel.Deferred.t
+  =
+  let open Async_kernel in
+  (* Step 1: Deal cards to create initial game state *)
+  let new_game_state = Game_State.deal_cards game_state in
+  (* Step 2: Save game state to Firebase *)
+  let ivar = Ivar.create () in
   let xhr = XmlHttpRequest.create () in
   let url =
     Printf.sprintf
-      "https://firestore.googleapis.com/v1/projects/presidents-game/databases/(default)/documents/lobbies/%s?updateMask.fieldPaths=status&key=AIzaSyAhgME9mU9-4G4vKi-5nuZBHt4Xur96XMw"
+      "https://firestore.googleapis.com/v1/projects/presidents-game/databases/(default)/documents/game_states/%s?key=AIzaSyAhgME9mU9-4G4vKi-5nuZBHt4Xur96XMw"
       game_id
   in
-  xhr##_open (Js.string "PATCH") (Js.string url) Js._true;
+  xhr##_open (Js.string "POST") (Js.string url) Js._true;
   xhr##setRequestHeader (Js.string "Content-Type") (Js.string "application/json");
-  let body_json = {|{"fields":{"status":{"stringValue":"started"}}}|} in
+  (* Serialize game state to Firestore format *)
+  let game_state_sexp = Game_State.sexp_of_t new_game_state |> Sexp.to_string in
+  let body_json =
+    Printf.sprintf
+      {|{"fields":{
+        "game_id":{"stringValue":"%s"},
+        "state":{"stringValue":"%s"},
+        "timestamp":{"timestampValue":"%s"}
+      }}|}
+      game_id
+      (String.escaped game_state_sexp)
+      (Js.to_string (new%js Js.date_now)##toISOString)
+  in
   xhr##.onreadystatechange
   := Js.wrap_callback (fun _ ->
        match xhr##.readyState with
@@ -226,13 +245,45 @@ let start_game ~game_id ~game_state ~set_game_state ~set_lobby_screen ~set_error
          let status = xhr##.status in
          if status >= 200 && status < 300
          then (
-           let new_state = Game_State.deal_cards game_state in
-           ignore
-             (Vdom.Effect.Many
-                [ set_game_state new_state; set_lobby_screen Lobby_screen.Playing ]))
-         else ignore (set_error_message (Some "Failed to start game"))
+           logf "[Firebase] Game state saved for %s" game_id;
+           (* Step 3: Update lobby status to "started" *)
+           let xhr_patch = XmlHttpRequest.create () in
+           let patch_url =
+             Printf.sprintf
+               "https://firestore.googleapis.com/v1/projects/presidents-game/databases/(default)/documents/lobbies/%s?updateMask.fieldPaths=status&key=AIzaSyAhgME9mU9-4G4vKi-5nuZBHt4Xur96XMw"
+               game_id
+           in
+           xhr_patch##_open (Js.string "PATCH") (Js.string patch_url) Js._true;
+           xhr_patch##setRequestHeader
+             (Js.string "Content-Type")
+             (Js.string "application/json");
+           let patch_body = {|{"fields":{"status":{"stringValue":"started"}}}|} in
+           xhr_patch##.onreadystatechange
+           := Js.wrap_callback (fun _ ->
+             match xhr_patch##.readyState with
+             | XmlHttpRequest.DONE ->
+               let patch_status = xhr_patch##.status in
+               if patch_status >= 200 && patch_status < 300
+               then (
+                 logf "[Firebase] Lobby status updated to 'started'";
+                 Ivar.fill ivar (Ok new_game_state))
+               else
+                 Ivar.fill
+                   ivar
+                   (Error (Printf.sprintf "Failed to update lobby: %d" patch_status))
+             | _ -> ());
+           ignore (xhr_patch##send (Js.Opt.return (Js.string patch_body))))
+         else
+           Ivar.fill ivar (Error (Printf.sprintf "Failed to save game state: %d" status))
        | _ -> ());
-  ignore (xhr##send (Js.Opt.return (Js.string body_json)))
+  ignore (xhr##send (Js.Opt.return (Js.string body_json)));
+  Ivar.read ivar
+;;
+
+(* Convert to effect *)
+let start_game_effect ~game_id ~game_state : (Game_State.t, string) Result.t Vdom.Effect.t
+  =
+  Bonsai_web.Effect.of_deferred_fun (fun () -> start_game_async ~game_id ~game_state) ()
 ;;
 
 let presidents_board
@@ -405,13 +456,21 @@ let presidents_board
                   ~attrs:
                     [ Vdom.Attr.class_ "action-button start-game-button"
                     ; Vdom.Attr.on_click (fun _ ->
-                        start_game
-                          ~game_id
-                          ~game_state
-                          ~set_game_state
-                          ~set_lobby_screen
-                          ~set_error_message;
-                        Vdom.Effect.Ignore)
+                        let open Vdom.Effect.Let_syntax in
+                        logf "[UI] Starting game %s" game_id;
+                        (* Call the async start_game *)
+                        let%bind result = start_game_effect ~game_id ~game_state in
+                        (* Handle the result *)
+                        match result with
+                        | Ok new_state ->
+                          logf "[UI] Game started successfully";
+                          Vdom.Effect.Many
+                            [ set_game_state new_state
+                            ; set_lobby_screen Lobby_screen.Playing
+                            ]
+                        | Error err ->
+                          logf "[UI] Failed to start game: %s" err;
+                          set_error_message (Some err))
                     ]
                   [ Vdom.Node.text "Start Game" ]
               ]
