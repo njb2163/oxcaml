@@ -99,14 +99,15 @@ let fetch_lobby_async ~game_id : (string list, string) Result.t Async_kernel.Def
            try
              let response_text = xhr##.responseText in
              let json = Js.Unsafe.global##._JSON##parse response_text in
+             logf "Fetch lobby response: %s" (Js.to_string json);
              let get_field obj field = Js.Unsafe.get obj field in
              let players_array =
-               json
-               |> get_field "fields"
-               |> get_field "players"
-               |> get_field "arrayValue"
-               |> get_field "values"
-             in
+             Js.Unsafe.get
+               (Js.Unsafe.get
+                  (Js.Unsafe.get (Js.Unsafe.get json "fields") "players")
+                  "arrayValue")
+               "values"
+           in
              let fields = json |> get_field "fields" in
              let players = fields |> get_field "players" in
              let array_values = players |> get_field "arrayValue" in
