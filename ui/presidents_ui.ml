@@ -495,7 +495,7 @@ let presidents_board
                           [ set_viewer_id player_idx
                           ; set_current_game_id (Some game_id) (* Start polling *)
                           ; set_lobby_screen
-                              (Lobby_screen.In_lobby { game_id; players; is_host = true })
+                              (Lobby_screen.In_lobby { game_id; players; is_host = false })
                           ]
                       | Error err ->
                         Vdom.Effect.Many
