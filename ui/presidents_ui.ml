@@ -75,9 +75,10 @@ let create_lobby_effect : unit -> (string * string list, string) Result.t Vdom.E
   Bonsai_web.Effect.of_deferred_fun create_lobby_async
 ;;
 
-(* Join an existing lobby - returns a Deferred *)
-(* Fetch lobby players - reusable *)
-let fetch_lobby_async ~game_id : (string list, string) Result.t Async_kernel.Deferred.t =
+(* Fetch lobby data including status *)
+let fetch_lobby_async ~game_id
+  : (string list * string, string) Result.t Async_kernel.Deferred.t
+  =
   let open Async_kernel in
   let ivar = Ivar.create () in
   let xhr = XmlHttpRequest.create () in
@@ -102,42 +103,53 @@ let fetch_lobby_async ~game_id : (string list, string) Result.t Async_kernel.Def
              in
              let json = Js.Unsafe.global##._JSON##parse response_text in
              let get_field obj field = Js.Unsafe.get obj field in
-             (* Defensive: check if each field exists before accessing *)
              let fields = get_field json "fields" in
              if Js.Optdef.test (Js.Optdef.return fields)
              then (
-               let players_field = get_field fields "players" in
-               if Js.Optdef.test (Js.Optdef.return players_field)
-               then (
-                 let array_value = get_field players_field "arrayValue" in
-                 if Js.Optdef.test (Js.Optdef.return array_value)
+               (* Extract players *)
+               let players =
+                 let players_field = get_field fields "players" in
+                 if Js.Optdef.test (Js.Optdef.return players_field)
                  then (
-                   let players_array = get_field array_value "values" in
-                   if Js.Optdef.test (Js.Optdef.return players_array)
+                   let array_value = get_field players_field "arrayValue" in
+                   if Js.Optdef.test (Js.Optdef.return array_value)
                    then (
-                     (* Now safe to read length *)
-                     let players = ref [] in
-                     let length = players_array##.length in
-                     for i = 0 to length - 1 do
-                       match Js.Optdef.to_option (Js.array_get players_array i) with
-                       | Some obj ->
-                         players
-                         := !players @ [ Js.to_string (get_field obj "stringValue") ]
-                       | None -> ()
-                     done;
-                     Ivar.fill ivar (Ok !players))
-                   else (
-                     logf "[Poll] No 'values' field, returning empty list";
-                     Ivar.fill ivar (Ok [])))
-                 else (
-                   logf "[Poll] No 'arrayValue' field, returning empty list";
-                   Ivar.fill ivar (Ok [])))
-               else (
-                 logf "[Poll] No 'players' field, returning empty list";
-                 Ivar.fill ivar (Ok [])))
+                     let players_array = get_field array_value "values" in
+                     if Js.Optdef.test (Js.Optdef.return players_array)
+                     then (
+                       let players = ref [] in
+                       let length = players_array##.length in
+                       for i = 0 to length - 1 do
+                         match Js.Optdef.to_option (Js.array_get players_array i) with
+                         | Some obj ->
+                           players
+                           := !players @ [ Js.to_string (get_field obj "stringValue") ]
+                         | None -> ()
+                       done;
+                       !players)
+                     else [])
+                   else [])
+                 else []
+               in
+               (* Extract status *)
+               let lobby_status =
+                 let status_field = get_field fields "status" in
+                 if Js.Optdef.test (Js.Optdef.return status_field)
+                 then (
+                   let status_value = get_field status_field "stringValue" in
+                   if Js.Optdef.test (Js.Optdef.return status_value)
+                   then Js.to_string status_value
+                   else "waiting")
+                 else "waiting"
+               in
+               logf
+                 "[Poll] Lobby status: %s, players: %s"
+                 lobby_status
+                 (String.concat ~sep:", " players);
+               Ivar.fill ivar (Ok (players, lobby_status)))
              else (
-               logf "[Poll] No 'fields' in response, returning empty list";
-               Ivar.fill ivar (Ok []))
+               logf "[Poll] No 'fields' in response";
+               Ivar.fill ivar (Ok ([], "waiting")))
            with
            | e ->
              Ivar.fill ivar (Error (Printf.sprintf "Parse error: %s" (Exn.to_string e))))
@@ -269,7 +281,7 @@ let join_lobby_async ~game_id
   let%bind fetch_result = fetch_lobby_async ~game_id in
   match fetch_result with
   | Error err -> return (Error err)
-  | Ok existing_players ->
+  | Ok (existing_players, _lobby_status) ->
     (* Step 2: Build updated player list *)
     let new_player_num = List.length existing_players + 1 in
     let new_player_name = Printf.sprintf "Player %d" new_player_num in
@@ -835,7 +847,6 @@ let app =
     match%sub current_game_id with
     | None -> Bonsai.const ()
     | Some game_id ->
-      (* Only poll when in lobby *)
       let%sub should_poll =
         let%arr lobby_screen = lobby_screen in
         match lobby_screen with
@@ -845,25 +856,44 @@ let app =
       (match%sub should_poll with
        | false -> Bonsai.const ()
        | true ->
-         (* Create the effect callback *)
          let%sub poll_callback =
            let%arr lobby_screen = lobby_screen
            and set_lobby_screen = set_lobby_screen
+           and set_game_state = set_game_state
            and game_id = game_id in
            let open Vdom.Effect.Let_syntax in
            let%bind result = fetch_lobby_effect ~game_id in
            match result with
-           | Ok new_players ->
+           | Ok (new_players, lobby_status) ->
              (match lobby_screen with
               | In_lobby { game_id; is_host; _ } ->
-                set_lobby_screen
-                  (Lobby_screen.In_lobby { game_id; players = new_players; is_host })
+                (* Check if game has started *)
+                if String.equal lobby_status "started"
+                then (
+                  logf "[Poll] Game started! Fetching game state...";
+                  let%bind game_state_result = fetch_game_state_effect ~game_id in
+                  match game_state_result with
+                  | Ok (Some new_game_state) ->
+                    logf "[Poll] Transitioning to Playing with new game state";
+                    Vdom.Effect.Many
+                      [ set_game_state new_game_state
+                      ; set_lobby_screen Lobby_screen.Playing
+                      ]
+                  | Ok None ->
+                    logf "[Poll] No game state found yet, waiting...";
+                    Vdom.Effect.Ignore
+                  | Error err ->
+                    logf "[Poll] Error fetching game state: %s" err;
+                    Vdom.Effect.Ignore)
+                else
+                  (* Game not started, just update player list *)
+                  set_lobby_screen
+                    (Lobby_screen.In_lobby { game_id; players = new_players; is_host })
               | _ -> Vdom.Effect.Ignore)
            | Error err ->
              logf "[Poll] Error: %s" err;
              Vdom.Effect.Ignore
          in
-         (* Clock.every will call poll_callback every 2 seconds *)
          Bonsai.Clock.every
            ~when_to_start_next_effect:`Every_multiple_of_period_blocking
            (Time_ns.Span.of_sec 2.0)
