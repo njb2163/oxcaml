@@ -107,6 +107,14 @@ let fetch_lobby_async ~game_id : (string list, string) Result.t Async_kernel.Def
                |> get_field "arrayValue"
                |> get_field "values"
              in
+             let fields = json |> get_field "fields" in
+             let players = fields |> get_field "players" in
+             let array_values = players |> get_field "arrayValue" in
+             let values = array_values |> get_field "values" in
+             logf "fields: %s" fields##toString;
+             logf "players: %s" players##toString;
+             logf "array_values: %s" array_values##toString;
+             logf "values: %s" values##toString;
              let players = ref [] in
              for i = 0 to players_array##.length - 1 do
                match Js.Optdef.to_option (Js.array_get players_array i) with
