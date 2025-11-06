@@ -158,6 +158,12 @@ input {
   bottom: 17%;
 }
 
+.hand .turn {
+  background-color: rgba(76, 175, 80, 0.3);
+  border: min(0.4vw, 0.4vh) solid #4CAF50;
+  box-shadow: 0 0 min(2vw, 2vh) rgba(76, 175, 80, 0.6);
+}
+
 .player_2 .card, .player_4 .card {
   margin-bottom: -30%;
   transform: rotate(90deg);
@@ -614,17 +620,4 @@ input {
   font-size: 2.5em;
   color: #333;
   font-weight: bold;
-}
-
-/* Hand border - indicates turn */
-.hand-border {
-  padding: min(1vw, 1vh);
-  border-radius: min(1vw, 1vh);
-  transition: all 0.3s ease;
-}
-
-.hand-border.turn {
-  background-color: rgba(76, 175, 80, 0.3);
-  border: min(0.4vw, 0.4vh) solid #4CAF50;
-  box-shadow: 0 0 min(2vw, 2vh) rgba(76, 175, 80, 0.6);
 }
