@@ -328,7 +328,7 @@ let start_game_async ~game_id ~game_state
   let xhr = XmlHttpRequest.create () in
   let url =
     Printf.sprintf
-      "https://firestore.googleapis.com/v1/projects/presidents-game/databases/(default)/documents/game_states/%s?key=AIzaSyAhgME9mU9-4G4vKi-5nuZBHt4Xur96XMw"
+      "https://firestore.googleapis.com/v1/projects/presidents-game/databases/(default)/documents/game_states?documentId=%s&key=AIzaSyAhgME9mU9-4G4vKi-5nuZBHt4Xur96XMw"
       game_id
   in
   xhr##_open (Js.string "POST") (Js.string url) Js._true;
