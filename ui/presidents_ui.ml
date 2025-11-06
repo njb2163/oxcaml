@@ -682,57 +682,69 @@ let presidents_board
     | Some msg ->
       Vdom.Node.div ~attrs:[ Vdom.Attr.class_ "error-message" ] [ Vdom.Node.text msg ]
   in
-  let render_hand ~(player : Player.t) =
+  let render_hand ~(player : Player.t) ~(whose_turn : Player_Idx.t option) =
     let is_current_player = player.idx = viewer_id in
     let max_players = 4 in
-    if is_current_player
-    then
-      Vdom.Node.div
-        ~attrs:[ Vdom.Attr.class_ "hand player_1" ]
-        ((* Show actual cards for current player - make them hoverable and clickable *)
-         List.map
-           player.hand
-           ~f:(fun card ->
-             let is_selected = List.mem selected_cards card ~equal:Card.equal in
-             let classes =
-               if is_selected then "card hoverable selected" else "card hoverable"
-             in
-             Vdom.Node.img
-               ~attrs:
-                 [ Vdom.Attr.class_ classes
-                 ; Vdom.Attr.src (Card.image_path card)
-                 ; Vdom.Attr.on_click (fun _ ->
-                     (* Toggle selection *)
-                     let new_selected =
-                       if is_selected
-                       then
-                         List.filter selected_cards ~f:(fun c -> not (Card.equal c card))
-                       else card :: selected_cards
-                     in
-                     set_selected_cards new_selected)
-                 ]
-               ()))
-    else
-      Vdom.Node.div
-        ~attrs:
-          [ Vdom.Attr.class_
-              (Printf.sprintf
-                 "hand player_%d"
-                 (((player.idx - viewer_id) % max_players) + 1))
-          ]
-        ((* Show card backs for other players *)
-         let hand_size = List.length player.hand in
-         [ Vdom.Node.div
-             ~attrs:[ Vdom.Attr.class_ "opponent-hand-display" ]
-             [ Vdom.Node.img
-                 ~attrs:
-                   [ Vdom.Attr.class_ "card"; Vdom.Attr.src "ui/resources/CARD-BACK.svg" ]
-                 ()
-             ; Vdom.Node.div (* Put card count so cards dont crowd the screen *)
-                 ~attrs:[ Vdom.Attr.class_ "card-count" ]
-                 [ Vdom.Node.text (Printf.sprintf "×%d" hand_size) ]
-             ]
-         ])
+    let is_turn = 
+      match whose_turn with
+      | Some idx -> idx = player.idx
+      | None -> false
+     in
+    let hand_border_class = if is_turn then "hand-border turn" else "hand-border" in
+    Vdom.Node.div
+      ~attrs:[ Vdom.Attr.class_ hand_border_class ]
+      [ (if is_current_player
+         then
+           Vdom.Node.div
+             ~attrs:[ Vdom.Attr.class_ "hand player_1" ]
+             ((* Show actual cards for current player - make them hoverable and clickable *)
+              List.map
+                player.hand
+                ~f:(fun card ->
+                  let is_selected = List.mem selected_cards card ~equal:Card.equal in
+                  let classes =
+                    if is_selected then "card hoverable selected" else "card hoverable"
+                  in
+                  Vdom.Node.img
+                    ~attrs:
+                      [ Vdom.Attr.class_ classes
+                      ; Vdom.Attr.src (Card.image_path card)
+                      ; Vdom.Attr.on_click (fun _ ->
+                          (* Toggle selection *)
+                          let new_selected =
+                            if is_selected
+                            then
+                              List.filter selected_cards ~f:(fun c ->
+                                not (Card.equal c card))
+                            else card :: selected_cards
+                          in
+                          set_selected_cards new_selected)
+                      ]
+                    ()))
+         else
+           Vdom.Node.div
+             ~attrs:
+               [ Vdom.Attr.class_
+                   (Printf.sprintf
+                      "hand player_%d"
+                      (((player.idx - viewer_id) % max_players) + 1))
+               ]
+             ((* Show card backs for other players *)
+              let hand_size = List.length player.hand in
+              [ Vdom.Node.div
+                  ~attrs:[ Vdom.Attr.class_ "opponent-hand-display" ]
+                  [ Vdom.Node.img
+                      ~attrs:
+                        [ Vdom.Attr.class_ "card"
+                        ; Vdom.Attr.src "ui/resources/CARD-BACK.svg"
+                        ]
+                      ()
+                  ; Vdom.Node.div (* Put card count so cards dont crowd the screen *)
+                      ~attrs:[ Vdom.Attr.class_ "card-count" ]
+                      [ Vdom.Node.text (Printf.sprintf "×%d" hand_size) ]
+                  ]
+              ]))
+      ]
   in
   let render_game_screen () =
     Vdom.Node.div
@@ -748,8 +760,14 @@ let presidents_board
          let trick_node =
            render_trick ~current_trick:(Table_State.cards_in_trick game_state.table)
          in
+         let whose_turn_idx =
+           match game_state.decision with
+           | In_progress { whose_turn } -> Some whose_turn
+           | _ -> None
+         in
          let player_nodes =
-           List.map game_state.players ~f:(fun player -> render_hand ~player)
+           List.map game_state.players ~f:(fun player ->
+             render_hand ~player ~whose_turn:whose_turn_idx)
          in
          let action_button = render_action_button ~selected_cards in
          let error_display = render_error_message ~error_message in
