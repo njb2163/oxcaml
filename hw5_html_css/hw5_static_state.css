@@ -484,6 +484,13 @@ input {
   justify-content: center;
 }
 
+.button-group .action-button {
+  position: relative;  /* Override the absolute positioning */
+  bottom: auto;
+  right: auto;
+}
+
+
 .back-button {
   background-color: #757575;
   border-color: #616161;

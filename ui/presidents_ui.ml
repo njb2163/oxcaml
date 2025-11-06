@@ -132,6 +132,14 @@ let join_lobby_async ~game_id
              match xhr_patch##.readyState with
              | XmlHttpRequest.DONE ->
                let patch_status = xhr_patch##.status in
+               let response_text =
+                 Js.to_string
+                   (Js.Opt.get xhr_patch##.responseText (fun () -> Js.string ""))
+               in
+               logf
+                 "[Firebase] PATCH response (status %d):\n%s"
+                 patch_status
+                 response_text;
                if patch_status >= 200 && patch_status < 300
                then Ivar.fill ivar (Ok (game_id, updated_players, player_idx))
                else
@@ -275,7 +283,7 @@ let presidents_board
                       match result with
                       | Ok (game_id, players, player_idx) ->
                         Vdom.Effect.Many
-                          [ set_viewer_id player_idx (* Host is always player 0 *)
+                          [ set_viewer_id player_idx
                           ; set_lobby_screen
                               (Lobby_screen.In_lobby { game_id; players; is_host = true })
                           ]
