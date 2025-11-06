@@ -493,6 +493,15 @@ input {
   background-color: #616161;
 }
 
+.join-confirm-button {
+  background-color: #2196F3;
+  border-color: #1976D2;
+}
+
+.join-confirm-button:hover {
+  background-color: #1976D2;
+}
+
 /* Lobby Waiting Screen */
 .lobby-waiting-screen {
   display: flex;
