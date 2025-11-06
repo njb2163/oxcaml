@@ -97,33 +97,51 @@ let fetch_lobby_async ~game_id : (string list, string) Result.t Async_kernel.Def
          else if status >= 200 && status < 300
          then (
            try
-             let response_text = xhr##.responseText in
+             let response_text =
+               Js.Opt.get xhr##.responseText (fun () -> Js.string "{}")
+             in
+             logf "[Poll] Raw response: %s" (Js.to_string response_text);
              let json = Js.Unsafe.global##._JSON##parse response_text in
-             logf "Fetch lobby response: %s" (Js.to_string json);
+             logf
+               "[Poll] Parsed JSON: %s"
+               (Js.to_string (Js.Unsafe.global##._JSON##stringify json));
              let get_field obj field = Js.Unsafe.get obj field in
-             let players_array =
-             Js.Unsafe.get
-               (Js.Unsafe.get
-                  (Js.Unsafe.get (Js.Unsafe.get json "fields") "players")
-                  "arrayValue")
-               "values"
-           in
-             let fields = json |> get_field "fields" in
-             let players = fields |> get_field "players" in
-             let array_values = players |> get_field "arrayValue" in
-             let values = array_values |> get_field "values" in
-             logf "fields: %s" fields##toString;
-             logf "players: %s" players##toString;
-             logf "array_values: %s" array_values##toString;
-             logf "values: %s" values##toString;
-             let players = ref [] in
-             for i = 0 to players_array##.length - 1 do
-               match Js.Optdef.to_option (Js.array_get players_array i) with
-               | Some obj ->
-                 players := !players @ [ Js.to_string (get_field obj "stringValue") ]
-               | None -> ()
-             done;
-             Ivar.fill ivar (Ok !players)
+             (* Defensive: check if each field exists before accessing *)
+             let fields = get_field json "fields" in
+             if Js.Optdef.test (Js.Optdef.return fields)
+             then (
+               let players_field = get_field fields "players" in
+               if Js.Optdef.test (Js.Optdef.return players_field)
+               then (
+                 let array_value = get_field players_field "arrayValue" in
+                 if Js.Optdef.test (Js.Optdef.return array_value)
+                 then (
+                   let players_array = get_field array_value "values" in
+                   if Js.Optdef.test (Js.Optdef.return players_array)
+                   then (
+                     (* Now safe to read length *)
+                     let players = ref [] in
+                     let length = players_array##.length in
+                     for i = 0 to length - 1 do
+                       match Js.Optdef.to_option (Js.array_get players_array i) with
+                       | Some obj ->
+                         players
+                         := !players @ [ Js.to_string (get_field obj "stringValue") ]
+                       | None -> ()
+                     done;
+                     Ivar.fill ivar (Ok !players))
+                   else (
+                     logf "[Poll] No 'values' field, returning empty list";
+                     Ivar.fill ivar (Ok [])))
+                 else (
+                   logf "[Poll] No 'arrayValue' field, returning empty list";
+                   Ivar.fill ivar (Ok [])))
+               else (
+                 logf "[Poll] No 'players' field, returning empty list";
+                 Ivar.fill ivar (Ok [])))
+             else (
+               logf "[Poll] No 'fields' in response, returning empty list";
+               Ivar.fill ivar (Ok []))
            with
            | e ->
              Ivar.fill ivar (Error (Printf.sprintf "Parse error: %s" (Exn.to_string e))))
