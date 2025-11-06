@@ -485,11 +485,17 @@ input {
 }
 
 .button-group .action-button {
-  position: relative;  /* Override the absolute positioning */
+  position: relative;  
   bottom: auto;
   right: auto;
 }
 
+
+.lobby-actions .action-button {
+  position: relative;  
+  bottom: auto;
+  right: auto;
+}
 
 .back-button {
   background-color: #757575;

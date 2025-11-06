@@ -94,6 +94,10 @@ let join_lobby_async ~game_id
        match xhr_get##.readyState with
        | XmlHttpRequest.DONE ->
          let status = xhr_get##.status in
+         let response_text =
+           Js.to_string (Js.Opt.get xhr_get##.responseText (fun () -> Js.string ""))
+         in
+         logf "[Firebase] GET response (status %d):\n%s" status response_text;
          if status = 404
          then Ivar.fill ivar (Error "Lobby not found")
          else if status >= 200 && status < 300
