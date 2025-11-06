@@ -694,7 +694,7 @@ let presidents_board
     if is_current_player
     then
       Vdom.Node.div
-        ~attrs:[ Vdom.Attr.class_ ("hand player_1" ^ hand_border_class) ]
+        ~attrs:[ Vdom.Attr.class_ ("hand player_1 " ^ hand_border_class) ]
         ((* Show actual cards for current player - make them hoverable and clickable *)
          List.map
            player.hand
@@ -723,7 +723,7 @@ let presidents_board
         ~attrs:
           [ Vdom.Attr.class_
               (Printf.sprintf
-                 "hand player_%d"
+                 "hand player_%d "
                  (((player.idx - viewer_id) % max_players) + 1)
                ^ hand_border_class)
           ]

@@ -158,7 +158,7 @@ input {
   bottom: 17%;
 }
 
-.hand .turn {
+.hand.turn { 
   background-color: rgba(76, 175, 80, 0.3);
   border: min(0.4vw, 0.4vh) solid #4CAF50;
   box-shadow: 0 0 min(2vw, 2vh) rgba(76, 175, 80, 0.6);
