@@ -28,6 +28,9 @@ let generate_game_id () =
   Printf.sprintf "%d-%d" timestamp random_suffix
 ;;
 
+let log msg = Firebug.console##log (Js.string msg)
+let logf fmt = Printf.ksprintf (fun s -> Firebug.console##log (Js.string s)) fmt
+
 (* Pure async function - returns a Deferred *)
 let create_lobby_async () : (string * string list, string) Result.t Async.Deferred.t =
   let open Async in
@@ -40,6 +43,7 @@ let create_lobby_async () : (string * string list, string) Result.t Async.Deferr
       game_id
   in
   xhr##_open (Js.string "POST") (Js.string url) Js._true;
+  log ("Creating lobby with ID: " ^ game_id);
   xhr##setRequestHeader (Js.string "Content-Type") (Js.string "application/json");
   let body_json =
     Printf.sprintf
@@ -56,11 +60,13 @@ let create_lobby_async () : (string * string list, string) Result.t Async.Deferr
        match xhr##.readyState with
        | XmlHttpRequest.DONE ->
          let status = xhr##.status in
+         logf "Create lobby response status: %d" status;
          if status >= 200 && status < 300
          then Ivar.fill ivar (Ok (game_id, [ "Player 1" ]))
          else Ivar.fill ivar (Error (Printf.sprintf "Failed: %d" status))
        | _ -> ());
   ignore (xhr##send (Js.Opt.return (Js.string body_json)));
+  log "Lobby reading ivar...";
   Ivar.read ivar
 ;;
 
