@@ -76,116 +76,106 @@ let create_lobby_effect : unit -> (string * string list, string) Result.t Vdom.E
 ;;
 
 (* Join an existing lobby - returns a Deferred *)
-let join_lobby_async ~game_id
-  : (string * string list * int, string) Result.t Async_kernel.Deferred.t
-  =
+(* Fetch lobby players - reusable *)
+let fetch_lobby_async ~game_id : (string list, string) Result.t Async_kernel.Deferred.t =
   let open Async_kernel in
   let ivar = Ivar.create () in
-  (* Step 1: Fetch the current lobby data *)
-  let xhr_get = XmlHttpRequest.create () in
-  let get_url =
+  let xhr = XmlHttpRequest.create () in
+  let url =
     Printf.sprintf
       "https://firestore.googleapis.com/v1/projects/presidents-game/databases/(default)/documents/lobbies/%s?key=AIzaSyAhgME9mU9-4G4vKi-5nuZBHt4Xur96XMw"
       game_id
   in
-  xhr_get##_open (Js.string "GET") (Js.string get_url) Js._true;
-  xhr_get##.onreadystatechange
+  xhr##_open (Js.string "GET") (Js.string url) Js._true;
+  xhr##.onreadystatechange
   := Js.wrap_callback (fun _ ->
-       match xhr_get##.readyState with
+       match xhr##.readyState with
        | XmlHttpRequest.DONE ->
-         let status = xhr_get##.status in
-         let response_text =
-           Js.to_string (Js.Opt.get xhr_get##.responseText (fun () -> Js.string ""))
-         in
-         logf "[Firebase] GET response (status %d):\n%s" status response_text;
+         let status = xhr##.status in
          if status = 404
          then Ivar.fill ivar (Error "Lobby not found")
          else if status >= 200 && status < 300
          then (
-           (* TODO: Parse the JSON response to get current players *)
-           (* For now, simplified: assume we can extract player count *)
-           (* In reality, you'd parse xhr_get##.responseText *)
-           let response_text = xhr_get##.responseText in
-           let json = Js.Unsafe.global##._JSON##parse response_text in
-           let players_array =
-             Js.Unsafe.get
-               (Js.Unsafe.get
-                  (Js.Unsafe.get (Js.Unsafe.get json "fields") "players")
-                  "arrayValue")
-               "values"
-           in
-           (* Extract player names from the array *)
-           let existing_players = ref [] in
-           let length = players_array##.length in
-           for i = 0 to length - 1 do
-             let player_obj = Js.array_get players_array i in
-             match Js.Optdef.to_option player_obj with
-             | Some obj ->
-               let name_js = Js.Unsafe.get obj "stringValue" in
-               let name = Js.to_string name_js in
-               existing_players := !existing_players @ [ name ]
-             | None -> ()
-           done;
-           let existing_players = !existing_players in
-           logf
-             "[Firebase] Existing players: %s"
-             (String.concat ~sep:"," existing_players);
-
-           (* Add new player *)
-           if List.length existing_players >= 4
-           then Ivar.fill ivar (Error "Lobby is full")
-           else
-           let new_player_num = List.length existing_players + 1 in
-           let new_player_name = Printf.sprintf "Player %d" new_player_num in
-           let updated_players = existing_players @ [ new_player_name ] in
-           let player_idx = List.length updated_players - 1 in
-           (* Build Firestore JSON *)
-           let player_values =
-             List.map updated_players ~f:(fun name ->
-               Printf.sprintf {|{"stringValue":"%s"}|} name)
-             |> String.concat ~sep:","
-           in
-           let body_json =
-             Printf.sprintf
-               {|{"fields":{"players":{"arrayValue":{"values":[%s]}}}}|}
-               player_values
-           in
-           (* Step 2: Update the lobby by adding the new player *)
-           let xhr_patch = XmlHttpRequest.create () in
-           let patch_url =
-             Printf.sprintf
-               "https://firestore.googleapis.com/v1/projects/presidents-game/databases/(default)/documents/lobbies/%s?updateMask.fieldPaths=players&key=AIzaSyAhgME9mU9-4G4vKi-5nuZBHt4Xur96XMw"
-               game_id
-           in
-           xhr_patch##_open (Js.string "PATCH") (Js.string patch_url) Js._true;
-           xhr_patch##setRequestHeader
-             (Js.string "Content-Type")
-             (Js.string "application/json");
-           xhr_patch##.onreadystatechange
-           := Js.wrap_callback (fun _ ->
-             match xhr_patch##.readyState with
-             | XmlHttpRequest.DONE ->
-               let patch_status = xhr_patch##.status in
-               let response_text =
-                 Js.to_string
-                   (Js.Opt.get xhr_patch##.responseText (fun () -> Js.string ""))
-               in
-               logf
-                 "[Firebase] PATCH response (status %d):\n%s"
-                 patch_status
-                 response_text;
-               if patch_status >= 200 && patch_status < 300
-               then Ivar.fill ivar (Ok (game_id, updated_players, player_idx))
-               else
-                 Ivar.fill
-                   ivar
-                   (Error (Printf.sprintf "Failed to update lobby: %d" patch_status))
-             | _ -> ());
-           ignore (xhr_patch##send (Js.Opt.return (Js.string body_json))))
-         else Ivar.fill ivar (Error (Printf.sprintf "Failed to fetch lobby: %d" status))
+           try
+             let response_text = xhr##.responseText in
+             let json = Js.Unsafe.global##._JSON##parse response_text in
+             let get_field obj field = Js.Unsafe.get obj field in
+             let players_array =
+               json
+               |> get_field "fields"
+               |> get_field "players"
+               |> get_field "arrayValue"
+               |> get_field "values"
+             in
+             let players = ref [] in
+             for i = 0 to players_array##.length - 1 do
+               match Js.Optdef.to_option (Js.array_get players_array i) with
+               | Some obj ->
+                 players := !players @ [ Js.to_string (get_field obj "stringValue") ]
+               | None -> ()
+             done;
+             Ivar.fill ivar (Ok !players)
+           with
+           | e ->
+             Ivar.fill ivar (Error (Printf.sprintf "Parse error: %s" (Exn.to_string e))))
+         else Ivar.fill ivar (Error (Printf.sprintf "Failed: %d" status))
        | _ -> ());
-  ignore (xhr_get##send Js.null);
+  ignore (xhr##send Js.null);
   Ivar.read ivar
+;;
+
+(* Convert to Effect *)
+let fetch_lobby_effect ~game_id =
+  Bonsai_web.Effect.of_deferred_fun (fun () -> fetch_lobby_async ~game_id) ()
+;;
+
+(* Simplified join_lobby using fetch_lobby_async *)
+let join_lobby_async ~game_id
+  : (string * string list * int, string) Result.t Async_kernel.Deferred.t
+  =
+  let open Async_kernel in
+  (* Step 1: Fetch existing players using the reusable function *)
+  let%bind fetch_result = fetch_lobby_async ~game_id in
+  match fetch_result with
+  | Error err -> return (Error err)
+  | Ok existing_players ->
+    (* Step 2: Build updated player list *)
+    let new_player_num = List.length existing_players + 1 in
+    let new_player_name = Printf.sprintf "Player %d" new_player_num in
+    let updated_players = existing_players @ [ new_player_name ] in
+    let player_idx = List.length updated_players - 1 in
+    logf "[Firebase] Adding %s to lobby %s" new_player_name game_id;
+    (* Step 3: PATCH the updated list *)
+    let ivar = Ivar.create () in
+    let xhr = XmlHttpRequest.create () in
+    let url =
+      Printf.sprintf
+        "https://firestore.googleapis.com/v1/projects/presidents-game/databases/(default)/documents/lobbies/%s?updateMask.fieldPaths=players&key=AIzaSyAhgME9mU9-4G4vKi-5nuZBHt4Xur96XMw"
+        game_id
+    in
+    xhr##_open (Js.string "PATCH") (Js.string url) Js._true;
+    xhr##setRequestHeader (Js.string "Content-Type") (Js.string "application/json");
+    let player_values =
+      List.map updated_players ~f:(fun name ->
+        Printf.sprintf {|{"stringValue":"%s"}|} name)
+      |> String.concat ~sep:","
+    in
+    let body_json =
+      Printf.sprintf
+        {|{"fields":{"players":{"arrayValue":{"values":[%s]}}}}|}
+        player_values
+    in
+    xhr##.onreadystatechange
+    := Js.wrap_callback (fun _ ->
+         match xhr##.readyState with
+         | XmlHttpRequest.DONE ->
+           let status = xhr##.status in
+           if status >= 200 && status < 300
+           then Ivar.fill ivar (Ok (game_id, updated_players, player_idx))
+           else Ivar.fill ivar (Error (Printf.sprintf "Failed to update: %d" status))
+         | _ -> ());
+    ignore (xhr##send (Js.Opt.return (Js.string body_json)));
+    Ivar.read ivar
 ;;
 
 (* Convert to effect *)
@@ -235,6 +225,7 @@ let presidents_board
       ~set_lobby_screen
       ~(join_game_id_input : string)
       ~set_join_game_id_input
+      ~set_current_game_id
   =
   (* ========== LOBBY SCREENS ========== *)
 
@@ -257,6 +248,7 @@ let presidents_board
                 | Ok (game_id, players) ->
                   Vdom.Effect.Many
                     [ set_viewer_id 0 (* Host is always player 0 *)
+                    ; set_current_game_id (Some game_id) (* Start polling *)
                     ; set_lobby_screen
                         (Lobby_screen.In_lobby { game_id; players; is_host = true })
                     ]
@@ -318,6 +310,7 @@ let presidents_board
                       | Ok (game_id, players, player_idx) ->
                         Vdom.Effect.Many
                           [ set_viewer_id player_idx
+                          ; set_current_game_id (Some game_id) (* Start polling *)
                           ; set_lobby_screen
                               (Lobby_screen.In_lobby { game_id; players; is_host = true })
                           ]
@@ -335,6 +328,7 @@ let presidents_board
                     Vdom.Effect.Many
                       [ set_lobby_screen Lobby_screen.Main_menu
                       ; set_error_message None
+                      ; set_current_game_id None (* Stop polling *)
                       ; set_join_game_id_input ""
                       ])
                 ]
@@ -409,6 +403,7 @@ let presidents_board
                    ; Vdom.Attr.on_click (fun _ ->
                        Vdom.Effect.Many
                          [ set_lobby_screen Lobby_screen.Main_menu
+                         ; set_current_game_id None (* Stop polling *)
                          ; set_error_message None
                          ])
                    ]
@@ -622,6 +617,56 @@ let app =
         type t = string [@@deriving sexp, equal]
       end)
   in
+  (* Track current game_id for polling *)
+  let%sub current_game_id, set_current_game_id =
+    Bonsai.state
+      ~default_model:None
+      (module struct
+        type t = string option [@@deriving sexp, equal]
+      end)
+  in
+  (* Poll lobby state every 2 seconds when in lobby *)
+  let%sub () =
+    match%sub current_game_id with
+    | None -> Bonsai.const ()
+    | Some game_id ->
+      (* Only poll when in lobby *)
+      let%sub should_poll =
+        let%arr lobby_screen = lobby_screen in
+        match lobby_screen with
+        | In_lobby _ -> true
+        | _ -> false
+      in
+      (match%sub should_poll with
+       | false -> Bonsai.const ()
+       | true ->
+         (* Create the effect callback *)
+         let%sub poll_callback =
+           let%arr lobby_screen = lobby_screen
+           and set_lobby_screen = set_lobby_screen
+           and game_id = game_id in
+           let open Vdom.Effect.Let_syntax in
+           (* This effect runs every 2 seconds *)
+           logf "[Poll] Fetching lobby %s" game_id;
+           let%bind result = fetch_lobby_effect ~game_id in
+           match result with
+           | Ok new_players ->
+             (match lobby_screen with
+              | In_lobby { game_id; is_host; _ } ->
+                logf "[Poll] Players: %s" (String.concat ~sep:", " new_players);
+                set_lobby_screen
+                  (Lobby_screen.In_lobby { game_id; players = new_players; is_host })
+              | _ -> Vdom.Effect.Ignore)
+           | Error err ->
+             logf "[Poll] Error: %s" err;
+             Vdom.Effect.Ignore
+         in
+         (* Clock.every will call poll_callback every 2 seconds *)
+         Bonsai.Clock.every
+           ~when_to_start_next_effect:`Every_multiple_of_period_blocking
+           (Time_ns.Span.of_sec 2.0)
+           poll_callback)
+  in
   let%arr game_state = game_state
   and set_game_state = set_game_state
   and viewer_id = viewer_id
@@ -633,7 +678,8 @@ let app =
   and lobby_screen = lobby_screen
   and set_lobby_screen = set_lobby_screen
   and join_game_id_input = join_game_id_input
-  and set_join_game_id_input = set_join_game_id_input in
+  and set_join_game_id_input = set_join_game_id_input
+  and set_current_game_id = set_current_game_id in
   presidents_board
     ~game_state
     ~set_game_state
@@ -647,6 +693,7 @@ let app =
     ~set_lobby_screen
     ~join_game_id_input
     ~set_join_game_id_input
+    ~set_current_game_id
 ;;
 
 let () = Bonsai_web.Start.start app
