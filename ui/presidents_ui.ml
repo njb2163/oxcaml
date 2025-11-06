@@ -100,11 +100,7 @@ let fetch_lobby_async ~game_id : (string list, string) Result.t Async_kernel.Def
              let response_text =
                Js.Opt.get xhr##.responseText (fun () -> Js.string "{}")
              in
-             logf "[Poll] Raw response: %s" (Js.to_string response_text);
              let json = Js.Unsafe.global##._JSON##parse response_text in
-             logf
-               "[Poll] Parsed JSON: %s"
-               (Js.to_string (Js.Unsafe.global##._JSON##stringify json));
              let get_field obj field = Js.Unsafe.get obj field in
              (* Defensive: check if each field exists before accessing *)
              let fields = get_field json "fields" in
@@ -673,14 +669,11 @@ let app =
            and set_lobby_screen = set_lobby_screen
            and game_id = game_id in
            let open Vdom.Effect.Let_syntax in
-           (* This effect runs every 2 seconds *)
-           logf "[Poll] Fetching lobby %s" game_id;
            let%bind result = fetch_lobby_effect ~game_id in
            match result with
            | Ok new_players ->
              (match lobby_screen with
               | In_lobby { game_id; is_host; _ } ->
-                logf "[Poll] Players: %s" (String.concat ~sep:", " new_players);
                 set_lobby_screen
                   (Lobby_screen.In_lobby { game_id; players = new_players; is_host })
               | _ -> Vdom.Effect.Ignore)
