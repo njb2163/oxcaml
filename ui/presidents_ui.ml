@@ -2,7 +2,6 @@ open! Core
 open Tictactoe_logic_library
 open Hw2_presidents_logic
 open Virtual_dom
-open Async
 open Bonsai.Let_syntax
 open Js_of_ocaml
 
@@ -32,8 +31,10 @@ let log msg = Firebug.console##log (Js.string msg)
 let logf fmt = Printf.ksprintf (fun s -> Firebug.console##log (Js.string s)) fmt
 
 (* Pure async function - returns a Deferred *)
-let create_lobby_async () : (string * string list, string) Result.t Async.Deferred.t =
-  let open Async in
+let create_lobby_async ()
+  : (string * string list, string) Result.t Async_kernel.Deferred.t
+  =
+  let open Async_kernel in
   let ivar = Ivar.create () in
   let game_id = generate_game_id () in
   let xhr = XmlHttpRequest.create () in
@@ -76,9 +77,9 @@ let create_lobby_effect : unit -> (string * string list, string) Result.t Vdom.E
 
 (* Join an existing lobby - returns a Deferred *)
 let join_lobby_async ~game_id
-  : (string * string list * int, string) Result.t Async.Deferred.t
+  : (string * string list * int, string) Result.t Async_kernel.Deferred.t
   =
-  let open Async in
+  let open Async_kernel in
   let ivar = Ivar.create () in
   (* Step 1: Fetch the current lobby data *)
   let xhr_get = XmlHttpRequest.create () in

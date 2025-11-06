@@ -7,6 +7,6 @@
   virtual_dom
   tictactoe_logic_library
   js_of_ocaml
-  async)
+  async_kernel)
  (preprocess
   (pps js_of_ocaml-ppx ppx_jane bonsai.ppx_bonsai)))
