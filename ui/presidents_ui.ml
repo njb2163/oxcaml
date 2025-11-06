@@ -152,6 +152,114 @@ let fetch_lobby_effect ~game_id =
   Bonsai_web.Effect.of_deferred_fun (fun () -> fetch_lobby_async ~game_id) ()
 ;;
 
+(* Fetch game state from Firebase *)
+let fetch_game_state_async ~game_id
+  : (Game_State.t option, string) Result.t Async_kernel.Deferred.t
+  =
+  let open Async_kernel in
+  let ivar = Ivar.create () in
+  let xhr = XmlHttpRequest.create () in
+  let url =
+    Printf.sprintf
+      "https://firestore.googleapis.com/v1/projects/presidents-game/databases/(default)/documents/game_states/%s?key=AIzaSyAhgME9mU9-4G4vKi-5nuZBHt4Xur96XMw"
+      game_id
+  in
+  xhr##_open (Js.string "GET") (Js.string url) Js._true;
+  xhr##.onreadystatechange
+  := Js.wrap_callback (fun _ ->
+       match xhr##.readyState with
+       | XmlHttpRequest.DONE ->
+         let status = xhr##.status in
+         if status = 404
+         then (
+           logf "[GameState] No game state found for %s" game_id;
+           Ivar.fill ivar (Ok None) (* No state saved yet *))
+         else if status >= 200 && status < 300
+         then (
+           try
+             let response_text =
+               Js.Opt.get xhr##.responseText (fun () -> Js.string "{}")
+             in
+             let json = Js.Unsafe.global##._JSON##parse response_text in
+             let get_field obj field = Js.Unsafe.get obj field in
+             (* Navigate: json.fields.state.stringValue *)
+             let fields = get_field json "fields" in
+             if Js.Optdef.test (Js.Optdef.return fields)
+             then (
+               let state_field = get_field fields "state" in
+               if Js.Optdef.test (Js.Optdef.return state_field)
+               then (
+                 let state_string_js = get_field state_field "stringValue" in
+                 if Js.Optdef.test (Js.Optdef.return state_string_js)
+                 then (
+                   (* Parse the sexp string back to Game_State.t *)
+                   let state_string = Js.to_string state_string_js in
+                   let sexp = Sexp.of_string state_string in
+                   let game_state = Game_State.t_of_sexp sexp in
+                   logf "[GameState] Successfully fetched game state for %s" game_id;
+                   Ivar.fill ivar (Ok (Some game_state)))
+                 else (
+                   logf "[GameState] No 'stringValue' in state field";
+                   Ivar.fill ivar (Ok None)))
+               else (
+                 logf "[GameState] No 'state' field";
+                 Ivar.fill ivar (Ok None)))
+             else (
+               logf "[GameState] No 'fields' in response";
+               Ivar.fill ivar (Ok None))
+           with
+           | e ->
+             Ivar.fill ivar (Error (Printf.sprintf "Parse error: %s" (Exn.to_string e))))
+         else Ivar.fill ivar (Error (Printf.sprintf "Failed: %d" status))
+       | _ -> ());
+  ignore (xhr##send Js.null);
+  Ivar.read ivar
+;;
+
+(* Convert to Effect *)
+let fetch_game_state_effect ~game_id =
+  Bonsai_web.Effect.of_deferred_fun (fun () -> fetch_game_state_async ~game_id) ()
+;;
+
+(* Save game state to Firebase *)
+let save_game_state_async ~game_id ~game_state
+  : (unit, string) Result.t Async_kernel.Deferred.t
+  =
+  let open Async_kernel in
+  let ivar = Ivar.create () in
+  let xhr = XmlHttpRequest.create () in
+  let url =
+    Printf.sprintf
+      "https://firestore.googleapis.com/v1/projects/presidents-game/databases/(default)/documents/game_states/%s?key=AIzaSyAhgME9mU9-4G4vKi-5nuZBHt4Xur96XMw"
+      game_id
+  in
+  xhr##_open (Js.string "PATCH") (Js.string url) Js._true;
+  xhr##setRequestHeader (Js.string "Content-Type") (Js.string "application/json");
+  let game_state_sexp = Game_State.sexp_of_t game_state |> Sexp.to_string in
+  let body_json =
+    Printf.sprintf
+      {|{"fields":{"state":{"stringValue":"%s"}}}|}
+      (String.escaped game_state_sexp)
+  in
+  xhr##.onreadystatechange
+  := Js.wrap_callback (fun _ ->
+       match xhr##.readyState with
+       | XmlHttpRequest.DONE ->
+         let status = xhr##.status in
+         if status >= 200 && status < 300
+         then Ivar.fill ivar (Ok ())
+         else Ivar.fill ivar (Error (Printf.sprintf "Failed: %d" status))
+       | _ -> ());
+  ignore (xhr##send (Js.Opt.return (Js.string body_json)));
+  Ivar.read ivar
+;;
+
+let save_game_state_effect ~game_id ~game_state =
+  Bonsai_web.Effect.of_deferred_fun
+    (fun () -> save_game_state_async ~game_id ~game_state)
+    ()
+;;
+
 (* Simplified join_lobby using fetch_lobby_async *)
 let join_lobby_async ~game_id
   : (string * string list * int, string) Result.t Async_kernel.Deferred.t
@@ -299,6 +407,7 @@ let presidents_board
       ~set_lobby_screen
       ~(join_game_id_input : string)
       ~set_join_game_id_input
+      ~(current_game_id : string option)
       ~set_current_game_id
   =
   (* ========== LOBBY SCREENS ========== *)
@@ -532,12 +641,26 @@ let presidents_board
               if has_selection then Play.Play { cards = selected_cards } else Play.Pass
             in
             let player = Player.lookup_player_exn game_state.players viewer_id in
-            let new_state = Game_State.make_move game_state player move in
-            match new_state with
-            | Ok state ->
-              Vdom.Effect.Many
-                [ set_selected_cards []; set_error_message None; set_game_state state ]
-            | _ -> set_error_message (Some "Invalid Move"))
+            let new_state_result = Game_State.make_move game_state player move in
+            match new_state_result with
+            | Ok new_state ->
+              let open Vdom.Effect.Let_syntax in
+              (* Update local state *)
+              let%bind () = set_selected_cards [] in
+              let%bind () = set_error_message None in
+              let%bind () = set_game_state new_state in
+              (* Save to Firebase so other players see it *)
+              let%bind save_result =
+                match current_game_id with
+                | None -> Vdom.Effect.return (Error "No game ID")
+                | Some current_game_id ->
+                  save_game_state_effect ~game_id:current_game_id ~game_state:new_state
+              in
+              (match save_result with
+               | Ok () -> logf "[Save] Game state saved"
+               | Error err -> logf "[Save] Error: %s" err);
+              Vdom.Effect.Ignore
+            | Error _ -> set_error_message (Some "Invalid Move"))
         ]
       [ Vdom.Node.text button_text ]
   in
@@ -746,6 +869,52 @@ let app =
            (Time_ns.Span.of_sec 2.0)
            poll_callback)
   in
+  (* Poll game state every 1 second when playing *)
+  let%sub () =
+    match%sub current_game_id with
+    | None -> Bonsai.const ()
+    | Some game_id ->
+      (* Only poll when in Playing state *)
+      let%sub should_poll_game =
+        let%arr lobby_screen = lobby_screen in
+        match lobby_screen with
+        | Playing -> true
+        | _ -> false
+      in
+      (match%sub should_poll_game with
+       | false -> Bonsai.const ()
+       | true ->
+         (* Create the effect callback for game state polling *)
+         let%sub poll_game_callback =
+           let%arr game_state = game_state
+           and set_game_state = set_game_state
+           and game_id = game_id in
+           let open Vdom.Effect.Let_syntax in
+           logf "[GameStatePoll] Fetching game state for %s" game_id;
+           let%bind result = fetch_game_state_effect ~game_id in
+           match result with
+           | Ok (Some new_game_state) ->
+             (* Only update if state actually changed *)
+             if Game_State.equal new_game_state game_state
+             then (
+               logf "[GameStatePoll] State unchanged";
+               Vdom.Effect.Ignore)
+             else (
+               logf "[GameStatePoll] State updated!";
+               set_game_state new_game_state)
+           | Ok None ->
+             logf "[GameStatePoll] No game state available yet";
+             Vdom.Effect.Ignore
+           | Error err ->
+             logf "[GameStatePoll] Error: %s" err;
+             Vdom.Effect.Ignore
+         in
+         (* Clock.every will call poll_game_callback every 1 second *)
+         Bonsai.Clock.every
+           ~when_to_start_next_effect:`Every_multiple_of_period_blocking
+           (Time_ns.Span.of_sec 0.5)
+           poll_game_callback)
+  in
   let%arr game_state = game_state
   and set_game_state = set_game_state
   and viewer_id = viewer_id
@@ -758,6 +927,7 @@ let app =
   and set_lobby_screen = set_lobby_screen
   and join_game_id_input = join_game_id_input
   and set_join_game_id_input = set_join_game_id_input
+  and current_game_id = current_game_id
   and set_current_game_id = set_current_game_id in
   presidents_board
     ~game_state
@@ -772,6 +942,7 @@ let app =
     ~set_lobby_screen
     ~join_game_id_input
     ~set_join_game_id_input
+    ~current_game_id
     ~set_current_game_id
 ;;
 
