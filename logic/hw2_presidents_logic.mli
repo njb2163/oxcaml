@@ -74,6 +74,7 @@ module Player : sig
     ; role : Role.t
     ; has_passed : bool
     ; total_points : int
+    ; is_cpu : bool
     }
   [@@deriving sexp, compare, equal]
 
@@ -81,6 +82,7 @@ module Player : sig
   val lookup_player_exn : t list -> Player_Idx.t -> t
   val update_player_hand : t list -> id:Player_Idx.t -> new_hand:Card.t list -> t list
   val sort_hand : Card.t list -> Card.t list
+  val mark_as_cpu : t list -> int list -> t list
 end
 
 module Move_error : sig
@@ -206,4 +208,5 @@ module Game_State : sig
   val active_player_idxs : t -> Player_Idx.t list
   val next_active_after : t -> Player_Idx.t -> Player_Idx.t option
   val make_move : t -> Player.t -> Play.t -> (t, Move_error.t) Result.t
+  val fill_empty_slots_with_cpu : t -> num_human_players:int -> t
 end

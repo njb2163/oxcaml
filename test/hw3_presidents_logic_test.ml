@@ -14,7 +14,14 @@ let print_hand (cards : Card.t list option) =
 let make_card rank suit = { Card.rank; suit }
 
 let make_player ~idx ~name ~hand =
-  { Player.idx; name; hand; role = Role.Citizen; has_passed = false; total_points = 0 }
+  { Player.idx
+  ; name
+  ; hand
+  ; role = Role.Citizen
+  ; has_passed = false
+  ; total_points = 0
+  ; is_cpu = false
+  }
 ;;
 
 let base_rules : Rules.t = { clear_on_two = true; starting_card = None }

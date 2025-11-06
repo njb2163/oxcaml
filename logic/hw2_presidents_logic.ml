@@ -95,6 +95,7 @@ module Player = struct
     ; role : Role.t
     ; has_passed : bool (* Needed to know if we have gone a full loop *)
     ; total_points : int (* How many points they have in total *)
+    ; is_cpu : bool (* Whether this player is controlled by AI *)
     }
   [@@deriving sexp, compare, equal]
 
@@ -106,6 +107,7 @@ module Player = struct
       ; role = Role.Citizen
       ; has_passed = false
       ; total_points = 0
+      ; is_cpu = false
       })
   ;;
 
@@ -123,6 +125,13 @@ module Player = struct
   ;;
 
   let sort_hand (hand : Card.t list) : Card.t list = List.sort hand ~compare:Card.compare
+
+  let mark_as_cpu (players : t list) (cpu_indices : int list) : t list =
+    List.map players ~f:(fun p ->
+      if List.mem cpu_indices p.idx ~equal:Int.equal
+      then { p with is_cpu = true; name = Printf.sprintf "CPU %d" (p.idx + 1) }
+      else p)
+  ;;
 end
 
 module Move_error = struct
@@ -315,6 +324,13 @@ module Game_State = struct
   ;;
 
   let shuffle_deck (deck : Card.t list) : Card.t list = List.permute deck
+
+  let fill_empty_slots_with_cpu (gs : t) ~(num_human_players : int) : t =
+    let max_players = List.length gs.players in
+    let cpu_indices = List.range num_human_players max_players in
+    let updated_players = Player.mark_as_cpu gs.players cpu_indices in
+    { gs with players = updated_players }
+  ;;
 
   let deal_cards (gs : t) : t =
     let shuffled = shuffle_deck gs.deck in

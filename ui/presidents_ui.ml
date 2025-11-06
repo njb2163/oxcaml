@@ -329,12 +329,19 @@ let join_lobby_effect ~game_id
 ;;
 
 (* Start the game (host only) - async version *)
-let start_game_async ~game_id ~game_state
+let start_game_async ~game_id ~game_state ~num_human_players
   : (Game_State.t, string) Result.t Async_kernel.Deferred.t
   =
   let open Async_kernel in
-  (* Step 1: Deal cards to create initial game state *)
-  let new_game_state = Game_State.deal_cards game_state in
+  (* Deal cards and mark CPUs *)
+  let dealt_state = Game_State.deal_cards game_state in
+  let new_game_state =
+    Game_State.fill_empty_slots_with_cpu dealt_state ~num_human_players
+  in
+  logf
+    "[Start] Created game with %d humans, %d CPUs"
+    num_human_players
+    (4 - num_human_players);
   (* Step 2: Save game state to Firebase *)
   let ivar = Ivar.create () in
   let xhr = XmlHttpRequest.create () in
@@ -401,9 +408,12 @@ let start_game_async ~game_id ~game_state
 ;;
 
 (* Convert to effect *)
-let start_game_effect ~game_id ~game_state : (Game_State.t, string) Result.t Vdom.Effect.t
+let start_game_effect ~game_id ~game_state ~num_human_players
+  : (Game_State.t, string) Result.t Vdom.Effect.t
   =
-  Bonsai_web.Effect.of_deferred_fun (fun () -> start_game_async ~game_id ~game_state) ()
+  Bonsai_web.Effect.of_deferred_fun
+    (fun () -> start_game_async ~game_id ~game_state ~num_human_players)
+    ()
 ;;
 
 let presidents_board
@@ -578,9 +588,12 @@ let presidents_board
                     [ Vdom.Attr.class_ "action-button start-game-button"
                     ; Vdom.Attr.on_click (fun _ ->
                         let open Vdom.Effect.Let_syntax in
+                        let num_human_players = List.length players in
                         logf "[UI] Starting game %s" game_id;
                         (* Call the async start_game *)
-                        let%bind result = start_game_effect ~game_id ~game_state in
+                        let%bind result =
+                          start_game_effect ~game_id ~game_state ~num_human_players
+                        in
                         (* Handle the result *)
                         match result with
                         | Ok new_state ->
@@ -854,6 +867,47 @@ let app =
       (module struct
         type t = string option [@@deriving sexp, equal]
       end)
+  in
+  (* Auto-play CPU moves *)
+  let%sub () =
+    let%sub should_run_cpu =
+      let%arr lobby_screen = lobby_screen in
+      match lobby_screen with
+      | Playing -> true
+      | _ -> false
+    in
+    match%sub should_run_cpu with
+    | false -> Bonsai.const ()
+    | true ->
+      let%sub cpu_move_effect =
+        let%arr game_state = game_state
+        and set_game_state = set_game_state
+        and current_game_id = current_game_id in
+        match game_state.decision with
+        | In_progress { whose_turn } ->
+          let player = Player.lookup_player_exn game_state.players whose_turn in
+          if player.is_cpu
+          then (
+            let open Vdom.Effect.Let_syntax in
+            logf "[CPU] %s making move" player.name;
+            let cpu_move = Hw4_presidents_cpu.computer_player_move game_state player in
+            match Game_State.make_move game_state player cpu_move with
+            | Ok new_state ->
+              let%bind () = set_game_state new_state in
+              (match current_game_id with
+               | Some gid ->
+                 let%bind _ = save_game_state_effect ~game_id:gid ~game_state:new_state in
+                 Vdom.Effect.Ignore
+               | None -> Vdom.Effect.Ignore)
+            | Error _ -> Vdom.Effect.Ignore)
+          else Vdom.Effect.Ignore
+        | _ -> Vdom.Effect.Ignore
+      in
+      (* Execute every 500ms *)
+      Bonsai.Clock.every
+        ~when_to_start_next_effect:`Every_multiple_of_period_blocking
+        (Time_ns.Span.of_sec 1.0)
+        cpu_move_effect
   in
   (* Poll lobby state every 2 seconds when in lobby *)
   let%sub () =
