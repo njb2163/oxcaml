@@ -1036,7 +1036,7 @@ let app =
          in
          (* Clock.every will call poll_game_callback every 1 second *)
          Bonsai.Clock.every
-           ~when_to_start_next_effect:`Every_multiple_of_period_blocking
+           ~when_to_start_next_effect:`Wait_period_after_previous_effect_starts_blocking
            (Time_ns.Span.of_sec 2.0)
            poll_game_callback)
   in
