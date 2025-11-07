@@ -904,7 +904,7 @@ let app =
       (* Execute every 500ms *)
       Bonsai.Clock.every
         ~when_to_start_next_effect:`Every_multiple_of_period_blocking
-        (Time_ns.Span.of_sec 2.0)
+        (Time_ns.Span.of_sec 4.0)
         cpu_move_effect
   in
   (* Poll lobby state every 2 seconds when in lobby *)
@@ -964,7 +964,7 @@ let app =
            (Time_ns.Span.of_sec 2.0)
            poll_callback)
   in
-  (* Poll game state every 1 second when playing *)
+  (* Poll game state every 2.0 seconds when playing *)
   let%sub () =
     match%sub current_game_id with
     | None -> Bonsai.const ()
@@ -1002,7 +1002,7 @@ let app =
          (* Clock.every will call poll_game_callback every 1 second *)
          Bonsai.Clock.every
            ~when_to_start_next_effect:`Every_multiple_of_period_blocking
-           (Time_ns.Span.of_sec 0.5)
+           (Time_ns.Span.of_sec 2.0)
            poll_game_callback)
   in
   let%arr game_state = game_state
