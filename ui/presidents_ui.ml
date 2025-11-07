@@ -752,6 +752,40 @@ let presidents_board
              ]
          ])
   in
+  (* Add this helper in presidents_board *)
+  let render_last_play ~(game_state : Game_State.t) =
+    match game_state.table.history with
+    | [] -> Vdom.Node.none
+    | (player_idx, play) :: _ ->
+      let player = Player.lookup_player_exn game_state.players player_idx in
+      let play_text =
+        match play with
+        | Play.Pass -> Printf.sprintf "%s passed" player.name
+        | Play.Play group ->
+          let cards_str =
+            List.map group.cards ~f:(fun card ->
+              match card.rank with
+              | Three -> "3"
+              | Four -> "4"
+              | Five -> "5"
+              | Six -> "6"
+              | Seven -> "7"
+              | Eight -> "8"
+              | Nine -> "9"
+              | Ten -> "10"
+              | Jack -> "J"
+              | Queen -> "Q"
+              | King -> "K"
+              | Ace -> "A"
+              | Two -> "2")
+            |> String.concat ~sep:", "
+          in
+          Printf.sprintf "%s played: %s" player.name cards_str
+      in
+      Vdom.Node.div
+        ~attrs:[ Vdom.Attr.class_ "last-play-display" ]
+        [ Vdom.Node.text play_text ]
+  in
   let render_game_screen () =
     Vdom.Node.div
       ~attrs:[ Vdom.Attr.class_ "game" ]
@@ -766,6 +800,7 @@ let presidents_board
          let trick_node =
            render_trick ~current_trick:(Table_State.cards_in_trick game_state.table)
          in
+         let last_play_node = render_last_play ~game_state in
          let whose_turn_idx =
            match game_state.decision with
            | In_progress { whose_turn } -> Some whose_turn
@@ -777,7 +812,7 @@ let presidents_board
          in
          let action_button = render_action_button ~selected_cards in
          let error_display = render_error_message ~error_message in
-         [ trick_node; action_button; error_display ] @ player_nodes
+         [ trick_node; last_play_node; action_button; error_display ] @ player_nodes
        | Phase.RoundEnd ->
          (match game_state.decision with
           | Round_Over { round_ranking } ->

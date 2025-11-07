@@ -621,3 +621,20 @@ input {
   color: #333;
   font-weight: bold;
 }
+
+/* Last play display */
+.last-play-display {
+  position: absolute;
+  top: 10%;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: rgba(255, 255, 255, 0.95);
+  padding: min(1.5vw, 1.5vh) min(3vw, 3vh);
+  border-radius: min(1vw, 1vh);
+  border: min(0.3vw, 0.3vh) solid #333;
+  font-size: 1.4em;
+  font-weight: bold;
+  color: #333;
+  box-shadow: 0 min(0.5vw, 0.5vh) min(1vw, 1vh) rgba(0, 0, 0, 0.3);
+  z-index: 100;
+}
