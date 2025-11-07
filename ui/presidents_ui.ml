@@ -67,7 +67,6 @@ let create_lobby_async ()
          else Ivar.fill ivar (Error (Printf.sprintf "Failed: %d" status))
        | _ -> ());
   ignore (xhr##send (Js.Opt.return (Js.string body_json)));
-  log "Lobby reading ivar...";
   Ivar.read ivar
 ;;
 
@@ -208,7 +207,6 @@ let fetch_game_state_async ~game_id
                    let state_string = Js.to_string state_string_js in
                    let sexp = Sexp.of_string state_string in
                    let game_state = Game_State.t_of_sexp sexp in
-                   logf "[GameState] Successfully fetched game state for %s" game_id;
                    Ivar.fill ivar (Ok (Some game_state)))
                  else (
                    logf "[GameState] No 'stringValue' in state field";
@@ -987,17 +985,14 @@ let app =
            and set_game_state = set_game_state
            and game_id = game_id in
            let open Vdom.Effect.Let_syntax in
-           logf "[GameStatePoll] Fetching game state for %s" game_id;
            let%bind result = fetch_game_state_effect ~game_id in
            match result with
            | Ok (Some new_game_state) ->
              (* Only update if state actually changed *)
              if Game_State.equal new_game_state game_state
              then (
-               logf "[GameStatePoll] State unchanged";
                Vdom.Effect.Ignore)
              else (
-               logf "[GameStatePoll] State updated!";
                set_game_state new_game_state)
            | Ok None ->
              logf "[GameStatePoll] No game state available yet";
