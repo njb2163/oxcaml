@@ -550,6 +550,14 @@ input {
   color: #2196F3;
 }
 
+.selectable {
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
+  user-select: text !important;
+  cursor: text;
+}
+
 .players-section {
   width: 80%;
   max-width: min(50vw, 50vh);
@@ -637,4 +645,20 @@ input {
   color: #333;
   box-shadow: 0 min(0.5vw, 0.5vh) min(1vw, 1vh) rgba(0, 0, 0, 0.3);
   z-index: 100;
+}
+
+.copy-button {
+  margin-left: min(1vw, 1vh);
+  padding: min(0.5vw, 0.5vh) min(1.5vw, 1.5vh);
+  background-color: #2196F3;
+  color: white;
+  border: none;
+  border-radius: min(0.5vw, 0.5vh);
+  cursor: pointer;
+  font-size: 0.9em;
+  transition: background-color 0.2s;
+}
+
+.copy-button:hover {
+  background-color: #1976D2;
 }

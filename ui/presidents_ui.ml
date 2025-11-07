@@ -554,8 +554,19 @@ let presidents_board
           ~attrs:[ Vdom.Attr.class_ "game-id-display" ]
           [ Vdom.Node.strong [ Vdom.Node.text "Game ID: " ]
           ; Vdom.Node.span
-              ~attrs:[ Vdom.Attr.class_ "game-id-value" ]
+              ~attrs:[ Vdom.Attr.class_ "game-id-value selectable" ]
               [ Vdom.Node.text game_id ]
+          ; Vdom.Node.button
+              ~attrs:
+                [ Vdom.Attr.class_ "copy-button"
+                ; Vdom.Attr.on_click (fun _ ->
+                    (* Copy to clipboard using JavaScript *)
+                    let clipboard = Js.Unsafe.global##.navigator##.clipboard in
+                    ignore (clipboard##writeText (Js.string game_id));
+                    log "Game ID copied to clipboard!";
+                    Vdom.Effect.Ignore)
+                ]
+              [ Vdom.Node.text "📋 Copy" ]
           ]
       ; Vdom.Node.div
           ~attrs:[ Vdom.Attr.class_ "players-section" ]
