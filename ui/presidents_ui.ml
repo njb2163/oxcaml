@@ -904,7 +904,7 @@ let app =
       (* Execute every 500ms *)
       Bonsai.Clock.every
         ~when_to_start_next_effect:`Every_multiple_of_period_blocking
-        (Time_ns.Span.of_sec 1.0)
+        (Time_ns.Span.of_sec 2.0)
         cpu_move_effect
   in
   (* Poll lobby state every 2 seconds when in lobby *)
@@ -990,10 +990,8 @@ let app =
            | Ok (Some new_game_state) ->
              (* Only update if state actually changed *)
              if Game_State.equal new_game_state game_state
-             then (
-               Vdom.Effect.Ignore)
-             else (
-               set_game_state new_game_state)
+             then Vdom.Effect.Ignore
+             else set_game_state new_game_state
            | Ok None ->
              logf "[GameStatePoll] No game state available yet";
              Vdom.Effect.Ignore
